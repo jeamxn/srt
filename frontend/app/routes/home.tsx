@@ -11,6 +11,7 @@ import {
   Space,
   Alert,
   Empty,
+  Popconfirm,
   App as AntdApp,
 } from "antd";
 import {
@@ -19,6 +20,8 @@ import {
   CheckCircleOutlined,
   CloseOutlined,
   ThunderboltFilled,
+  PauseOutlined,
+  CaretRightOutlined,
 } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 import { api, type Train, type Job, type Credentials } from "~/api";
@@ -44,9 +47,10 @@ const SEAT_TYPES = [
 
 const STATUS_BADGE: Record<
   string,
-  "processing" | "success" | "error" | "default"
+  "processing" | "success" | "error" | "default" | "warning"
 > = {
   PENDING: "processing",
+  PAUSED: "warning",
   RESERVED: "success",
   FAILED: "error",
   CANCELLED: "default",
@@ -180,6 +184,27 @@ export default function Home() {
   async function handleCancel(id: number) {
     try {
       await api.cancelJob(id);
+      message.success("재시도를 완전히 중단했습니다.");
+      await refreshJobs();
+    } catch (e: any) {
+      message.error(e.message);
+    }
+  }
+
+  async function handlePause(id: number) {
+    try {
+      await api.pauseJob(id);
+      message.info("일시중지했습니다. 재개하면 이어서 재시도합니다.");
+      await refreshJobs();
+    } catch (e: any) {
+      message.error(e.message);
+    }
+  }
+
+  async function handleResume(id: number) {
+    try {
+      await api.resumeJob(id);
+      message.success("재개했습니다.");
       await refreshJobs();
     } catch (e: any) {
       message.error(e.message);
@@ -473,15 +498,40 @@ export default function Home() {
                       </Text>
                     </div>
                   )}
-                  {j.status === "PENDING" && (
+                  {(j.status === "PENDING" || j.status === "PAUSED") && (
                     <div style={{ marginTop: 8 }}>
-                      <Button
-                        size="small"
-                        icon={<CloseOutlined />}
-                        onClick={() => handleCancel(j.id)}
-                      >
-                        재시도 중단
-                      </Button>
+                      <Space size={8}>
+                        {j.status === "PENDING" ? (
+                          <Button
+                            size="small"
+                            icon={<PauseOutlined />}
+                            onClick={() => handlePause(j.id)}
+                          >
+                            일시중지
+                          </Button>
+                        ) : (
+                          <Button
+                            size="small"
+                            type="primary"
+                            icon={<CaretRightOutlined />}
+                            onClick={() => handleResume(j.id)}
+                          >
+                            재개
+                          </Button>
+                        )}
+                        <Popconfirm
+                          title="재시도를 완전히 중단할까요?"
+                          description="중단하면 이 예약 작업은 다시 시작할 수 없습니다."
+                          okText="중단"
+                          cancelText="취소"
+                          okButtonProps={{ danger: true }}
+                          onConfirm={() => handleCancel(j.id)}
+                        >
+                          <Button size="small" danger icon={<CloseOutlined />}>
+                            재시도 중단
+                          </Button>
+                        </Popconfirm>
+                      </Space>
                     </div>
                   )}
                 </div>

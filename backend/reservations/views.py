@@ -186,13 +186,47 @@ def job_detail(request, job_id):
 
 @api_view(["POST"])
 def job_cancel(request, job_id):
-    """진행중인 재시도 작업을 취소."""
+    """진행중인 재시도 작업을 완전 취소."""
+    try:
+        job = ReservationJob.objects.get(id=job_id)
+    except ReservationJob.DoesNotExist:
+        return Response(status=http_status.HTTP_404_NOT_FOUND)
+    if job.status in (
+        ReservationJob.Status.PENDING,
+        ReservationJob.Status.PAUSED,
+    ):
+        job.status = ReservationJob.Status.CANCELLED
+        job.last_message = "사용자에 의해 취소됨."
+        job.save()
+    return Response(ReservationJobSerializer(job).data)
+
+
+@api_view(["POST"])
+def job_pause(request, job_id):
+    """재시도를 일시중지 (나중에 resume 가능)."""
     try:
         job = ReservationJob.objects.get(id=job_id)
     except ReservationJob.DoesNotExist:
         return Response(status=http_status.HTTP_404_NOT_FOUND)
     if job.status == ReservationJob.Status.PENDING:
-        job.status = ReservationJob.Status.CANCELLED
-        job.last_message = "사용자에 의해 취소됨."
+        job.status = ReservationJob.Status.PAUSED
+        job.last_message = f"일시중지됨 (시도 {job.attempts}회). 재개하면 이어서 재시도합니다."
+        job.save()
+    return Response(ReservationJobSerializer(job).data)
+
+
+@api_view(["POST"])
+def job_resume(request, job_id):
+    """일시중지된 작업을 재개 — 재시도 루프를 다시 큐잉."""
+    try:
+        job = ReservationJob.objects.get(id=job_id)
+    except ReservationJob.DoesNotExist:
+        return Response(status=http_status.HTTP_404_NOT_FOUND)
+    if job.status == ReservationJob.Status.PAUSED:
+        job.status = ReservationJob.Status.PENDING
+        job.last_message = "재개됨. 재시도를 다시 시작합니다."
+        job.save()
+        async_result = attempt_reservation.apply_async(args=[job.id], countdown=1)
+        job.task_id = async_result.id
         job.save()
     return Response(ReservationJobSerializer(job).data)

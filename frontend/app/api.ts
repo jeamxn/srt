@@ -100,4 +100,10 @@ export const api = {
 
   cancelJob: (id: number) =>
     request<Job>(`/jobs/${id}/cancel/`, { method: "POST" }),
+
+  pauseJob: (id: number) =>
+    request<Job>(`/jobs/${id}/pause/`, { method: "POST" }),
+
+  resumeJob: (id: number) =>
+    request<Job>(`/jobs/${id}/resume/`, { method: "POST" }),
 };

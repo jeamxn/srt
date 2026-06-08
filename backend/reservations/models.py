@@ -11,6 +11,7 @@ class ReservationJob(models.Model):
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "대기/재시도중"
+        PAUSED = "PAUSED", "일시중지"
         RESERVED = "RESERVED", "예약완료"
         FAILED = "FAILED", "실패"
         CANCELLED = "CANCELLED", "취소됨"

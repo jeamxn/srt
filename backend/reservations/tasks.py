@@ -30,13 +30,16 @@ def attempt_reservation(self, job_id: int):
     except ReservationJob.DoesNotExist:
         return {"error": f"job {job_id} not found"}
 
-    # 이미 끝났거나 취소된 작업이면 중단
+    # 이미 끝났거나, 취소/일시중지된 작업이면 중단
     if job.status in (
         ReservationJob.Status.RESERVED,
         ReservationJob.Status.CANCELLED,
         ReservationJob.Status.FAILED,
     ):
         return {"status": job.status, "note": "already finished"}
+    if job.status == ReservationJob.Status.PAUSED:
+        # 일시중지: 재시도 루프를 멈춘다 (resume 시 다시 큐잉됨)
+        return {"status": "PAUSED", "note": "paused, retry loop stopped"}
 
     job.attempts += 1
     job.task_id = self.request.id or ""
