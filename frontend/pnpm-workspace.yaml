@@ -1,3 +1,2 @@
-allowBuilds:
-  esbuild: true
+dangerouslyAllowAllBuilds: true
 verifyDepsBeforeRun: false
