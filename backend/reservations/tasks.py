@@ -69,11 +69,8 @@ def attempt_reservation(self, job_id: int):
             job.status = ReservationJob.Status.FAILED
             job.last_message = f"최대 시도 횟수({max_attempts}) 초과로 중단."
             job.save()
-            send_slack(f"❌ [{_job_label(job)}] {job.last_message}")
             return {"status": "FAILED", "reason": "max attempts"}
         job.save()
-        # 매 시도마다 Slack 알림
-        send_slack(f"🔄 [{_job_label(job)}] 시도 {job.attempts}회 — 자리 없음, 재시도 중")
         # interval 초 뒤 재시도
         attempt_reservation.apply_async(args=[job_id], countdown=interval)
         return {"status": "RETRY", "attempt": job.attempts}
@@ -81,13 +78,11 @@ def attempt_reservation(self, job_id: int):
         job.status = ReservationJob.Status.FAILED
         job.last_message = f"로그인 실패: {e}"
         job.save()
-        send_slack(f"❌ [{_job_label(job)}] 로그인 실패로 중단: {e}")
         return {"status": "FAILED", "reason": "auth"}
     except SRTServiceError as e:
         job.status = ReservationJob.Status.FAILED
         job.last_message = f"오류: {e}"
         job.save()
-        send_slack(f"❌ [{_job_label(job)}] 오류로 중단: {e}")
         return {"status": "FAILED", "reason": str(e)}
 
     # 성공

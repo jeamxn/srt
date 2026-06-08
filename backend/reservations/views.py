@@ -3,7 +3,6 @@ from rest_framework.response import Response
 from rest_framework import status as http_status
 
 from .models import ReservationJob
-from .slack import send_slack
 from .serializers import (
     ReservationJobSerializer,
     SearchRequestSerializer,
@@ -149,10 +148,6 @@ def job_start(request, job_id):
     async_result = attempt_reservation.apply_async(args=[job.id], countdown=0)
     job.task_id = async_result.id
     job.save()
-    send_slack(
-        f"🔄 [{job.train_label or f'{job.dep}→{job.arr} {job.date} {job.train_number}'}] "
-        f"자동 예약 시작 — {job.retry_interval_ms}ms 간격으로 재시도"
-    )
     return Response(ReservationJobSerializer(job).data)
 
 
