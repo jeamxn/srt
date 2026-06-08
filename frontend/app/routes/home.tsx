@@ -33,6 +33,8 @@ import {
   getUserId,
   setAuth,
   clearAuth,
+  getSlackUserId,
+  setSlackUserIdStore,
   type Train,
   type Job,
   type Credentials,
@@ -98,8 +100,15 @@ export default function Home() {
   const [userId, setUserId] = useState<string | null>(null);
   // Slack 멤버 목록 + 선택된 멘션 대상 (미선택이면 알림 안 감)
   const [slackUsers, setSlackUsers] = useState<SlackUser[]>([]);
-  const [slackUserId, setSlackUserId] = useState<string | undefined>(undefined);
+  const [slackUserId, setSlackUserId] = useState<string | undefined>(
+    () => getSlackUserId() ?? undefined
+  );
   const [slackLoading, setSlackLoading] = useState(false);
+
+  function chooseSlackUser(id: string | undefined) {
+    setSlackUserId(id);
+    setSlackUserIdStore(id ?? null);
+  }
 
   const [dep, setDep] = useState("수서");
   const [arr, setArr] = useState("부산");
@@ -478,10 +487,11 @@ export default function Home() {
                   </Text>
                   <Select
                     value={slackUserId}
-                    onChange={setSlackUserId}
+                    onChange={chooseSlackUser}
                     allowClear
                     showSearch
                     loading={slackLoading}
+                    disabled={slackLoading}
                     optionFilterProp="label"
                     placeholder={
                       slackLoading

@@ -9,6 +9,18 @@ const API_BASE =
 
 const TOKEN_KEY = "srt_auth_token";
 const USER_KEY = "srt_user_id";
+const SLACK_USER_KEY = "srt_slack_user_id";
+
+export function getSlackUserId(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(SLACK_USER_KEY);
+}
+
+export function setSlackUserIdStore(id: string | null) {
+  if (typeof window === "undefined") return;
+  if (id) window.localStorage.setItem(SLACK_USER_KEY, id);
+  else window.localStorage.removeItem(SLACK_USER_KEY);
+}
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
