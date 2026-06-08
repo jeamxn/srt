@@ -1,271 +1,85 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:is(.dark *));
+
 :root {
-  --bg: #0f1115;
-  --panel: #181b22;
-  --panel-2: #1f232c;
-  --border: #2a2f3a;
-  --text: #e6e9ef;
-  --muted: #9aa3b2;
-  --accent: #5b8cff;
-  --accent-2: #3a6bff;
-  --green: #34d399;
-  --red: #f87171;
-  --yellow: #fbbf24;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 222.2 47.4% 11.2%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 222.2 84% 4.9%;
+  --radius: 0.625rem;
+}
+
+.dark {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  --card: 222.2 47% 8%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222.2 84% 4.9%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 210 40% 98%;
+  --primary-foreground: 222.2 47.4% 11.2%;
+  --secondary: 217.2 32.6% 17.5%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 217.2 32.6% 17.5%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 62.8% 50.6%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217.2 32.6% 20%;
+  --input: 217.2 32.6% 20%;
+  --ring: 212.7 26.8% 83.9%;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
 }
 
 * {
-  box-sizing: border-box;
+  border-color: hsl(var(--border));
 }
 
 body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-}
-
-.container {
-  max-width: 920px;
-  margin: 0 auto;
-  padding: 32px 20px 80px;
-}
-
-.title {
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  margin: 0 0 4px;
-}
-
-.subtitle {
-  color: var(--muted);
-  margin: 0 0 28px;
-  font-size: 14px;
-}
-
-.card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 20px;
-  margin-bottom: 20px;
-}
-
-.card h2 {
-  font-size: 16px;
-  margin: 0 0 16px;
-  font-weight: 700;
-}
-
-.row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1;
-  min-width: 140px;
-}
-
-.field label {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-input,
-select {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 14px;
-  outline: none;
-}
-
-input:focus,
-select:focus {
-  border-color: var(--accent);
-}
-
-button {
-  background: var(--accent-2);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 18px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-button:hover {
-  background: var(--accent);
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-button.ghost {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--muted);
-}
-
-button.ghost:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.train-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.train {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 16px;
-}
-
-.train-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.train-time {
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.train-meta {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.badges {
-  display: flex;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.badge {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-}
-
-.badge.ok {
-  color: var(--green);
-  border-color: var(--green);
-}
-
-.badge.no {
-  color: var(--red);
-  border-color: var(--red);
-}
-
-.msg {
-  padding: 12px 14px;
-  border-radius: 8px;
-  font-size: 13px;
-  margin-bottom: 16px;
-}
-
-.msg.error {
-  background: rgba(248, 113, 113, 0.12);
-  color: var(--red);
-  border: 1px solid rgba(248, 113, 113, 0.3);
-}
-
-.msg.info {
-  background: rgba(91, 140, 255, 0.12);
-  color: var(--accent);
-  border: 1px solid rgba(91, 140, 255, 0.3);
-}
-
-.msg.success {
-  background: rgba(52, 211, 153, 0.12);
-  color: var(--green);
-  border: 1px solid rgba(52, 211, 153, 0.3);
-}
-
-.job {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 10px;
-}
-
-.job-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.status-tag {
-  font-size: 12px;
-  font-weight: 700;
-  padding: 3px 10px;
-  border-radius: 999px;
-}
-
-.status-PENDING {
-  background: rgba(251, 191, 36, 0.15);
-  color: var(--yellow);
-}
-
-.status-RESERVED {
-  background: rgba(52, 211, 153, 0.15);
-  color: var(--green);
-}
-
-.status-FAILED {
-  background: rgba(248, 113, 113, 0.15);
-  color: var(--red);
-}
-
-.status-CANCELLED {
-  background: rgba(154, 163, 178, 0.15);
-  color: var(--muted);
-}
-
-.job-meta {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.spin {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  margin-right: 6px;
-  vertical-align: middle;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
