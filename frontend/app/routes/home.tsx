@@ -18,6 +18,7 @@ import {
   SearchOutlined,
   CheckCircleOutlined,
   CloseOutlined,
+  ThunderboltFilled,
 } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 import { api, type Train, type Job, type Credentials } from "~/api";
@@ -205,9 +206,10 @@ export default function Home() {
               alignItems: "center",
               justifyContent: "center",
               fontSize: 22,
+              color: "#fff",
             }}
           >
-            🚄
+            <ThunderboltFilled />
           </div>
           <div>
             <Title level={3} style={{ margin: 0 }}>
