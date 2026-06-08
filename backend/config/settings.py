@@ -110,6 +110,11 @@ if _cors_env:
 else:
     CORS_ALLOW_ALL_ORIGINS = True
 
+# 커스텀 인증 헤더(X-Auth-Token) 허용 — 기본 허용 목록에 추가
+from corsheaders.defaults import default_headers as _cors_default_headers
+
+CORS_ALLOW_HEADERS = (*_cors_default_headers, "x-auth-token")
+
 # Celery
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
 CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://redis:6379/1")
