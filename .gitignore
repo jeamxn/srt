@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.env
+*.sqlite3
+
+# Django
+/backend/staticfiles/
+/backend/media/
+
+# Node
+node_modules/
+/frontend/build/
+/frontend/.react-router/
+npm-debug.log*
+yarn-error.log*
+
+# Docker
+.env.local
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.log
