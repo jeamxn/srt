@@ -18,6 +18,7 @@ node_modules/
 /frontend/.react-router/
 npm-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
 # Docker
 .env.local

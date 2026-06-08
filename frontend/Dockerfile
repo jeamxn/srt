@@ -1,29 +1,35 @@
 FROM node:20-slim AS build
 
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm install
+COPY package.json pnpm-lock.yaml .npmrc ./
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 
 ARG VITE_API_BASE=http://localhost:8000
 ENV VITE_API_BASE=$VITE_API_BASE
 
-RUN npm run build
+RUN pnpm run build
 
 FROM node:20-slim AS runtime
 
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+ENV NODE_ENV=production
+RUN corepack enable
+
 WORKDIR /app
 
-ENV NODE_ENV=production
-
-COPY --from=build /app/package.json ./package.json
-COPY --from=build /app/package-lock.json* ./
-RUN npm install --omit=dev
+COPY package.json pnpm-lock.yaml .npmrc ./
+RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=build /app/build ./build
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start"]
+CMD ["pnpm", "run", "start"]
