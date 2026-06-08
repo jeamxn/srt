@@ -261,9 +261,15 @@ export default function Home() {
     }
   }
 
-  async function handleResume(id: number) {
+  async function handleResume(j: Job) {
+    const iv = intervalFor(j);
+    const ms = Math.round(iv.value * (UNIT_FACTOR[iv.unit] ?? 1000));
+    if (!ms || ms < 100) {
+      message.warning("재시도 간격은 최소 100ms 이상이어야 합니다.");
+      return;
+    }
     try {
-      await api.resumeJob(id);
+      await api.resumeJob(j.id, ms);
       message.success("재개했습니다.");
       await refreshJobs();
     } catch (e: any) {
@@ -718,31 +724,73 @@ export default function Home() {
                       </Space>
                     </div>
                   )}
-                  {(j.status === "PENDING" || j.status === "PAUSED") && (
+                  {j.status === "PENDING" && (
                     <div style={{ marginTop: 8 }}>
                       <Space size={8} wrap>
                         <Text type="secondary" style={{ fontSize: 12 }}>
                           간격 {msToUnit(j.retry_interval_ms).value}
                           {msToUnit(j.retry_interval_ms).unit}
                         </Text>
-                        {j.status === "PENDING" ? (
-                          <Button
-                            size="small"
-                            icon={<PauseOutlined />}
-                            onClick={() => handlePause(j.id)}
-                          >
-                            일시중지
+                        <Button
+                          size="small"
+                          icon={<PauseOutlined />}
+                          onClick={() => handlePause(j.id)}
+                        >
+                          일시중지
+                        </Button>
+                        <Popconfirm
+                          title="재시도를 완전히 중단할까요?"
+                          description="중단하면 이 예약 작업은 다시 시작할 수 없습니다."
+                          okText="중단"
+                          cancelText="취소"
+                          okButtonProps={{ danger: true }}
+                          onConfirm={() => handleCancel(j.id)}
+                        >
+                          <Button size="small" danger icon={<CloseOutlined />}>
+                            재시도 중단
                           </Button>
-                        ) : (
-                          <Button
+                        </Popconfirm>
+                      </Space>
+                    </div>
+                  )}
+                  {j.status === "PAUSED" && (
+                    <div style={{ marginTop: 8 }}>
+                      <Space size={8} wrap>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          재시도 간격
+                        </Text>
+                        <Space.Compact>
+                          <InputNumber
                             size="small"
-                            type="primary"
-                            icon={<CaretRightOutlined />}
-                            onClick={() => handleResume(j.id)}
-                          >
-                            재개
-                          </Button>
-                        )}
+                            min={1}
+                            value={intervalFor(j).value}
+                            onChange={(v) =>
+                              setIntervalValue(j.id, Number(v) || 0)
+                            }
+                            style={{ width: 90 }}
+                          />
+                          <Select
+                            size="small"
+                            value={intervalFor(j).unit}
+                            onChange={(u) =>
+                              setIntervalUnit(j.id, u, intervalFor(j).value)
+                            }
+                            options={[
+                              { value: "ms", label: "ms" },
+                              { value: "s", label: "초" },
+                              { value: "min", label: "분" },
+                            ]}
+                            style={{ width: 70 }}
+                          />
+                        </Space.Compact>
+                        <Button
+                          size="small"
+                          type="primary"
+                          icon={<CaretRightOutlined />}
+                          onClick={() => handleResume(j)}
+                        >
+                          재개
+                        </Button>
                         <Popconfirm
                           title="재시도를 완전히 중단할까요?"
                           description="중단하면 이 예약 작업은 다시 시작할 수 없습니다."

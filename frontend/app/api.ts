@@ -127,6 +127,11 @@ export const api = {
   pauseJob: (id: number) =>
     request<Job>(`/jobs/${id}/pause/`, { method: "POST" }),
 
-  resumeJob: (id: number) =>
-    request<Job>(`/jobs/${id}/resume/`, { method: "POST" }),
+  resumeJob: (id: number, retry_interval_ms?: number) =>
+    request<Job>(`/jobs/${id}/resume/`, {
+      method: "POST",
+      body: JSON.stringify(
+        retry_interval_ms != null ? { retry_interval_ms } : {}
+      ),
+    }),
 };

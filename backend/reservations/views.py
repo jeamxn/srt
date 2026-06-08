@@ -190,12 +190,23 @@ def job_pause(request, job_id):
 
 @api_view(["POST"])
 def job_resume(request, job_id):
-    """일시중지된 작업을 재개 — 재시도 루프를 다시 큐잉."""
+    """일시중지된 작업을 재개 — 재시도 루프를 다시 큐잉.
+
+    요청 본문에 retry_interval_ms 가 있으면 간격을 갱신한 뒤 재개한다.
+    """
     try:
         job = ReservationJob.objects.get(id=job_id)
     except ReservationJob.DoesNotExist:
         return Response(status=http_status.HTTP_404_NOT_FOUND)
     if job.status == ReservationJob.Status.PAUSED:
+        interval = request.data.get("retry_interval_ms")
+        if interval is not None:
+            try:
+                iv = int(interval)
+                if iv >= 100:
+                    job.retry_interval_ms = iv
+            except (TypeError, ValueError):
+                pass
         job.status = ReservationJob.Status.PENDING
         job.last_message = "재개됨. 재시도를 다시 시작합니다."
         job.save()
