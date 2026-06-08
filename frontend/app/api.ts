@@ -53,6 +53,7 @@ export interface Job {
   status: string;
   status_display: string;
   attempts: number;
+  retry_interval_ms: number;
   last_message: string;
   reservation_number: string;
   result: any;
@@ -97,6 +98,12 @@ export const api = {
   job: (id: number) => request<Job>(`/jobs/${id}/`),
 
   jobs: () => request<{ jobs: Job[] }>("/jobs/"),
+
+  startJob: (id: number, retry_interval_ms: number) =>
+    request<Job>(`/jobs/${id}/start/`, {
+      method: "POST",
+      body: JSON.stringify({ retry_interval_ms }),
+    }),
 
   cancelJob: (id: number) =>
     request<Job>(`/jobs/${id}/cancel/`, { method: "POST" }),

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Card,
   Input,
+  InputNumber,
   Select,
   Button,
   Badge,
@@ -22,6 +23,7 @@ import {
   ThunderboltFilled,
   PauseOutlined,
   CaretRightOutlined,
+  PlusOutlined,
 } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 import { api, type Train, type Job, type Credentials } from "~/api";
@@ -49,12 +51,22 @@ const STATUS_BADGE: Record<
   string,
   "processing" | "success" | "error" | "default" | "warning"
 > = {
+  QUEUED: "default",
   PENDING: "processing",
   PAUSED: "warning",
   RESERVED: "success",
   FAILED: "error",
   CANCELLED: "default",
 };
+
+// 재시도 간격 단위 변환
+const UNIT_FACTOR: Record<string, number> = { ms: 1, s: 1000, min: 60000 };
+
+function msToUnit(ms: number): { value: number; unit: string } {
+  if (ms % 60000 === 0 && ms >= 60000) return { value: ms / 60000, unit: "min" };
+  if (ms % 1000 === 0 && ms >= 1000) return { value: ms / 1000, unit: "s" };
+  return { value: ms, unit: "ms" };
+}
 
 export function meta() {
   return [
@@ -86,6 +98,29 @@ export default function Home() {
   const [reservingNo, setReservingNo] = useState<string | null>(null);
 
   const [jobs, setJobs] = useState<Job[]>([]);
+  // 잡별 재시도 간격 편집 상태 (value + unit)
+  const [intervals, setIntervals] = useState<
+    Record<number, { value: number; unit: string }>
+  >({});
+  const [startingId, setStartingId] = useState<number | null>(null);
+
+  function intervalFor(j: Job) {
+    return intervals[j.id] ?? msToUnit(j.retry_interval_ms);
+  }
+
+  function setIntervalValue(id: number, value: number) {
+    setIntervals((m) => ({
+      ...m,
+      [id]: { value, unit: m[id]?.unit ?? "s" },
+    }));
+  }
+
+  function setIntervalUnit(id: number, unit: string, current: number) {
+    setIntervals((m) => ({
+      ...m,
+      [id]: { value: m[id]?.value ?? current, unit },
+    }));
+  }
 
   useEffect(() => {
     api
@@ -181,6 +216,25 @@ export default function Home() {
     }
   }
 
+  async function handleStart(j: Job) {
+    const iv = intervalFor(j);
+    const ms = Math.round(iv.value * (UNIT_FACTOR[iv.unit] ?? 1000));
+    if (!ms || ms < 100) {
+      message.warning("재시도 간격은 최소 100ms 이상이어야 합니다.");
+      return;
+    }
+    setStartingId(j.id);
+    try {
+      await api.startJob(j.id, ms);
+      message.success("자동 예약을 시작했습니다.");
+      await refreshJobs();
+    } catch (e: any) {
+      message.error(e.message);
+    } finally {
+      setStartingId(null);
+    }
+  }
+
   async function handleCancel(id: number) {
     try {
       await api.cancelJob(id);
@@ -241,7 +295,7 @@ export default function Home() {
               SRT 자동 예약
             </Title>
             <Text type="secondary">
-              자리가 있으면 즉시 예약, 없으면 5초마다 자동 재시도합니다.
+              열차를 대기열에 담고, 예약 현황에서 간격을 정해 자동 예약을 시작하세요.
             </Text>
           </div>
         </Space>
@@ -443,10 +497,11 @@ export default function Home() {
                       </div>
                       <Button
                         type={anySeat ? "primary" : "default"}
+                        icon={<PlusOutlined />}
                         loading={reservingNo === t.train_number}
                         onClick={() => handleReserve(t)}
                       >
-                        {anySeat ? "예약" : "자동 예약"}
+                        대기열 추가
                       </Button>
                     </div>
                   );
@@ -498,9 +553,66 @@ export default function Home() {
                       </Text>
                     </div>
                   )}
+                  {j.status === "QUEUED" && (
+                    <div style={{ marginTop: 10 }}>
+                      <Space size={8} wrap>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          재시도 간격
+                        </Text>
+                        <Space.Compact>
+                          <InputNumber
+                            size="small"
+                            min={1}
+                            value={intervalFor(j).value}
+                            onChange={(v) =>
+                              setIntervalValue(j.id, Number(v) || 0)
+                            }
+                            style={{ width: 90 }}
+                          />
+                          <Select
+                            size="small"
+                            value={intervalFor(j).unit}
+                            onChange={(u) =>
+                              setIntervalUnit(j.id, u, intervalFor(j).value)
+                            }
+                            options={[
+                              { value: "ms", label: "ms" },
+                              { value: "s", label: "초" },
+                              { value: "min", label: "분" },
+                            ]}
+                            style={{ width: 70 }}
+                          />
+                        </Space.Compact>
+                        <Button
+                          size="small"
+                          type="primary"
+                          icon={<CaretRightOutlined />}
+                          loading={startingId === j.id}
+                          onClick={() => handleStart(j)}
+                        >
+                          시작
+                        </Button>
+                        <Popconfirm
+                          title="이 작업을 삭제할까요?"
+                          okText="삭제"
+                          cancelText="취소"
+                          okButtonProps={{ danger: true }}
+                          onConfirm={() => handleCancel(j.id)}
+                        >
+                          <Button size="small" danger icon={<CloseOutlined />}>
+                            삭제
+                          </Button>
+                        </Popconfirm>
+                      </Space>
+                    </div>
+                  )}
                   {(j.status === "PENDING" || j.status === "PAUSED") && (
                     <div style={{ marginTop: 8 }}>
-                      <Space size={8}>
+                      <Space size={8} wrap>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          간격 {msToUnit(j.retry_interval_ms).value}
+                          {msToUnit(j.retry_interval_ms).unit}
+                        </Text>
                         {j.status === "PENDING" ? (
                           <Button
                             size="small"
