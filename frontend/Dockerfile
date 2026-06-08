@@ -1,4 +1,4 @@
-FROM node:20-slim AS build
+FROM node:22-slim AS build
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -16,7 +16,7 @@ ENV VITE_API_BASE=$VITE_API_BASE
 
 RUN pnpm run build
 
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
