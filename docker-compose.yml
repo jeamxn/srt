@@ -47,8 +47,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
 
   worker:
     build:
@@ -81,8 +81,8 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
 
 volumes:
   pgdata:
