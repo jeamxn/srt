@@ -7,9 +7,38 @@ const API_BASE =
   import.meta.env.VITE_API_BASE ||
   "http://localhost:8000";
 
+const TOKEN_KEY = "srt_auth_token";
+const USER_KEY = "srt_user_id";
+
+export function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
+
+export function getUserId(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(USER_KEY);
+}
+
+export function setAuth(token: string, userId: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(TOKEN_KEY, token);
+  window.localStorage.setItem(USER_KEY, userId);
+}
+
+export function clearAuth() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(TOKEN_KEY);
+  window.localStorage.removeItem(USER_KEY);
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getToken();
   const res = await fetch(`${API_BASE}/api${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { "X-Auth-Token": token } : {}),
+    },
     ...options,
   });
   const text = await res.text();
@@ -70,7 +99,7 @@ export const api = {
   stations: () => request<{ stations: string[] }>("/stations/"),
 
   loginCheck: (c: Credentials) =>
-    request<{ ok: boolean }>("/login-check/", {
+    request<{ ok: boolean; user_id: string; token: string }>("/login-check/", {
       method: "POST",
       body: JSON.stringify(c),
     }),

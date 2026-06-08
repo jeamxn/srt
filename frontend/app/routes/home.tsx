@@ -17,6 +17,7 @@ import {
 } from "antd";
 import {
   LoginOutlined,
+  LogoutOutlined,
   SearchOutlined,
   CheckCircleOutlined,
   CloseOutlined,
@@ -26,7 +27,16 @@ import {
   PlusOutlined,
 } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
-import { api, type Train, type Job, type Credentials } from "~/api";
+import {
+  api,
+  getToken,
+  getUserId,
+  setAuth,
+  clearAuth,
+  type Train,
+  type Job,
+  type Credentials,
+} from "~/api";
 
 const { Title, Text } = Typography;
 
@@ -84,6 +94,7 @@ export default function Home() {
   const [stations, setStations] = useState<string[]>([]);
   const [creds, setCreds] = useState<Credentials>({ srt_id: "", srt_pw: "" });
   const [loggedIn, setLoggedIn] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [dep, setDep] = useState("수서");
   const [arr, setArr] = useState("부산");
@@ -135,14 +146,29 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
+  // 저장된 토큰이 있으면 로그인 상태 복원 + 작업 조회
   useEffect(() => {
+    const t = getToken();
+    const uid = getUserId();
+    if (t && uid) {
+      setLoggedIn(true);
+      setUserId(uid);
+      setCreds((c) => ({ ...c, srt_id: uid }));
+      refreshJobs();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!loggedIn) return;
     const hasPending = jobs.some((j) => j.status === "PENDING");
     if (!hasPending) return;
     const t = setInterval(refreshJobs, 3000);
     return () => clearInterval(t);
-  }, [jobs]);
+  }, [jobs, loggedIn]);
 
   async function refreshJobs() {
+    if (!getToken()) return;
     try {
       const d = await api.jobs();
       setJobs(d.jobs);
@@ -151,26 +177,42 @@ export default function Home() {
     }
   }
 
-  // 검색/예약 가능 여부: 아이디·비번이 채워졌으면 됨 (로그인 확인은 권장이나 필수는 아님)
-  const canQuery = creds.srt_id.trim() !== "" && creds.srt_pw.trim() !== "";
+  // 검색/예약: 로그인(토큰)된 상태에서만 가능
+  const canQuery =
+    loggedIn && creds.srt_id.trim() !== "" && creds.srt_pw.trim() !== "";
 
   async function handleLogin() {
-    if (!canQuery) {
-      message.warning("SRT 아이디와 비밀번호를 입력하세요.");
+    if (creds.srt_id.trim() === "" || creds.srt_pw.trim() === "") {
+      message.warning("회원번호와 비밀번호를 입력하세요.");
       return;
     }
     setLoginLoading(true);
     try {
-      await api.loginCheck(creds);
+      const res = await api.loginCheck(creds);
+      setAuth(res.token, res.user_id);
       setLoggedIn(true);
-      message.success("로그인 확인 완료. 열차를 검색하세요.");
+      setUserId(res.user_id);
+      message.success(`로그인 완료 (회원번호 ${res.user_id}). 열차를 검색하세요.`);
       refreshJobs();
     } catch (e: any) {
+      clearAuth();
       setLoggedIn(false);
+      setUserId(null);
       message.error(e.message);
     } finally {
       setLoginLoading(false);
     }
+  }
+
+  function handleLogout() {
+    clearAuth();
+    setLoggedIn(false);
+    setUserId(null);
+    setJobs([]);
+    setTrains([]);
+    setSearched(false);
+    setCreds((c) => ({ ...c, srt_pw: "" }));
+    message.success("로그아웃했습니다.");
   }
 
   async function handleSearch() {
@@ -378,58 +420,78 @@ export default function Home() {
           extra={
             loggedIn ? (
               <Tag icon={<CheckCircleOutlined />} color="success">
-                확인됨
+                회원번호 {userId}
               </Tag>
             ) : null
           }
         >
-          <Space direction="vertical" size={16} style={{ width: "100%" }}>
-            <div
-              style={{
-                display: "grid",
-                gap: 16,
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              }}
+          {loggedIn ? (
+            <Space
+              direction="vertical"
+              size={12}
+              style={{ width: "100%" }}
             >
-              <div>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  아이디 (전화번호 / 이메일 / 회원번호)
-                </Text>
-                <Input
-                  value={creds.srt_id}
-                  onChange={(e) =>
-                    setCreds((c) => ({ ...c, srt_id: e.target.value }))
-                  }
-                  placeholder="010-1234-5678"
-                  size="large"
-                  style={{ marginTop: 6 }}
-                />
+              <Text type="secondary" style={{ fontSize: 13 }}>
+                회원번호 <strong>{userId}</strong> 로 로그인되어 있습니다. 아래
+                예약 현황에는 이 계정의 작업만 표시됩니다.
+              </Text>
+              <Button
+                icon={<LogoutOutlined />}
+                onClick={handleLogout}
+                danger
+              >
+                로그아웃
+              </Button>
+            </Space>
+          ) : (
+            <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 16,
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                }}
+              >
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    SRT 회원번호 (숫자)
+                  </Text>
+                  <Input
+                    value={creds.srt_id}
+                    onChange={(e) =>
+                      setCreds((c) => ({ ...c, srt_id: e.target.value }))
+                    }
+                    placeholder="예: 2288275161"
+                    size="large"
+                    style={{ marginTop: 6 }}
+                  />
+                </div>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    비밀번호
+                  </Text>
+                  <Input.Password
+                    value={creds.srt_pw}
+                    onChange={(e) =>
+                      setCreds((c) => ({ ...c, srt_pw: e.target.value }))
+                    }
+                    placeholder="비밀번호"
+                    size="large"
+                    style={{ marginTop: 6 }}
+                    onPressEnter={handleLogin}
+                  />
+                </div>
               </div>
-              <div>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  비밀번호
-                </Text>
-                <Input.Password
-                  value={creds.srt_pw}
-                  onChange={(e) =>
-                    setCreds((c) => ({ ...c, srt_pw: e.target.value }))
-                  }
-                  placeholder="비밀번호"
-                  size="large"
-                  style={{ marginTop: 6 }}
-                  onPressEnter={handleLogin}
-                />
-              </div>
-            </div>
-            <Button
-              type="primary"
-              icon={<LoginOutlined />}
-              loading={loginLoading}
-              onClick={handleLogin}
-            >
-              {loggedIn ? "재확인" : "로그인 확인"}
-            </Button>
-          </Space>
+              <Button
+                type="primary"
+                icon={<LoginOutlined />}
+                loading={loginLoading}
+                onClick={handleLogin}
+              >
+                로그인
+              </Button>
+            </Space>
+          )}
         </Card>
 
         {/* 2. 검색 */}
@@ -517,7 +579,7 @@ export default function Home() {
             </Button>
             {!canQuery && (
               <Text type="secondary" style={{ fontSize: 12 }}>
-                * 위에서 SRT 아이디·비밀번호를 입력하면 검색할 수 있어요.
+                * 위에서 SRT 회원번호로 먼저 로그인하면 검색할 수 있어요.
               </Text>
             )}
           </Space>

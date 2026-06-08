@@ -1,8 +1,10 @@
+import secrets
+
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status as http_status
 
-from .models import ReservationJob
+from .models import ReservationJob, AuthToken
 from .serializers import (
     ReservationJobSerializer,
     SearchRequestSerializer,
@@ -18,6 +20,26 @@ from .srt_service import (
 from .tasks import attempt_reservation
 
 
+def _auth_user_id(request):
+    """X-Auth-Token 헤더로 user_id 를 해석한다. 없거나 무효면 None."""
+    token = request.headers.get("X-Auth-Token") or request.GET.get("token")
+    if not token:
+        return None
+    try:
+        at = AuthToken.objects.get(token=token)
+    except AuthToken.DoesNotExist:
+        return None
+    at.save(update_fields=["last_used_at"])  # touch
+    return at.user_id
+
+
+def _unauthorized():
+    return Response(
+        {"detail": "로그인이 필요합니다. SRT 계정으로 먼저 로그인하세요."},
+        status=http_status.HTTP_401_UNAUTHORIZED,
+    )
+
+
 @api_view(["GET"])
 def stations(request):
     """예약 가능한 역 목록."""
@@ -26,21 +48,27 @@ def stations(request):
 
 @api_view(["POST"])
 def login_check(request):
-    """SRT 자격증명 검증."""
+    """SRT 자격증명 검증 + 인증 토큰 발급.
+
+    회원번호로만 로그인 가능. 성공하면 user_id(회원번호) 와 토큰을 돌려준다.
+    """
     srt_id = request.data.get("srt_id")
     srt_pw = request.data.get("srt_pw")
     if not srt_id or not srt_pw:
         return Response(
-            {"detail": "srt_id 와 srt_pw 가 필요합니다."},
+            {"detail": "회원번호와 비밀번호가 필요합니다."},
             status=http_status.HTTP_400_BAD_REQUEST,
         )
     try:
-        verify_login(srt_id, srt_pw)
+        user_id = verify_login(srt_id, srt_pw)
     except SRTAuthError as e:
         return Response({"detail": str(e)}, status=http_status.HTTP_401_UNAUTHORIZED)
     except SRTServiceError as e:
         return Response({"detail": str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
-    return Response({"ok": True})
+
+    token = secrets.token_hex(24)
+    AuthToken.objects.create(token=token, user_id=user_id)
+    return Response({"ok": True, "user_id": user_id, "token": token})
 
 
 @api_view(["POST"])
@@ -70,14 +98,18 @@ def search(request):
 def reserve(request):
     """예약 요청을 큐에 등록만 한다 (즉시 시도하지 않음).
 
-    실제 재시도 루프는 사용자가 '예약 현황'에서 시작 버튼을 눌러야 시작된다.
-    재시도 간격(retry_interval_ms)도 함께 저장한다.
+    로그인한 계정(user_id)에 귀속된다. 실제 재시도 루프는 사용자가
+    '예약 현황'에서 시작 버튼을 눌러야 시작된다.
     """
+    user_id = _auth_user_id(request)
+    if not user_id:
+        return _unauthorized()
     s = ReserveRequestSerializer(data=request.data)
     s.is_valid(raise_exception=True)
     d = s.validated_data
 
     job = ReservationJob.objects.create(
+        user_id=user_id,
         srt_id=d["srt_id"],
         srt_pw=d["srt_pw"],
         dep=d["dep"],
@@ -101,18 +133,32 @@ def reserve(request):
     )
 
 
+def _get_owned_job(request, job_id):
+    """로그인한 user_id 소유의 job 을 반환. (job, error_response) 튜플."""
+    user_id = _auth_user_id(request)
+    if not user_id:
+        return None, _unauthorized()
+    try:
+        job = ReservationJob.objects.get(id=job_id, user_id=user_id)
+    except ReservationJob.DoesNotExist:
+        return None, Response(status=http_status.HTTP_404_NOT_FOUND)
+    return job, None
+
+
 @api_view(["GET"])
 def job_list(request):
-    jobs = ReservationJob.objects.all()[:100]
+    user_id = _auth_user_id(request)
+    if not user_id:
+        return _unauthorized()
+    jobs = ReservationJob.objects.filter(user_id=user_id)[:100]
     return Response({"jobs": ReservationJobSerializer(jobs, many=True).data})
 
 
 @api_view(["GET"])
 def job_detail(request, job_id):
-    try:
-        job = ReservationJob.objects.get(id=job_id)
-    except ReservationJob.DoesNotExist:
-        return Response(status=http_status.HTTP_404_NOT_FOUND)
+    job, err = _get_owned_job(request, job_id)
+    if err:
+        return err
     return Response(ReservationJobSerializer(job).data)
 
 
@@ -122,10 +168,9 @@ def job_start(request, job_id):
 
     요청 본문에 retry_interval_ms 가 있으면 간격을 갱신한 뒤 시작한다.
     """
-    try:
-        job = ReservationJob.objects.get(id=job_id)
-    except ReservationJob.DoesNotExist:
-        return Response(status=http_status.HTTP_404_NOT_FOUND)
+    job, err = _get_owned_job(request, job_id)
+    if err:
+        return err
     if job.status not in (
         ReservationJob.Status.QUEUED,
         ReservationJob.Status.PAUSED,
@@ -154,10 +199,9 @@ def job_start(request, job_id):
 @api_view(["POST"])
 def job_cancel(request, job_id):
     """진행중인 재시도 작업을 완전 취소."""
-    try:
-        job = ReservationJob.objects.get(id=job_id)
-    except ReservationJob.DoesNotExist:
-        return Response(status=http_status.HTTP_404_NOT_FOUND)
+    job, err = _get_owned_job(request, job_id)
+    if err:
+        return err
     if job.status in (
         ReservationJob.Status.QUEUED,
         ReservationJob.Status.PENDING,
@@ -172,10 +216,9 @@ def job_cancel(request, job_id):
 @api_view(["POST"])
 def job_pause(request, job_id):
     """재시도를 일시중지 (나중에 resume 가능)."""
-    try:
-        job = ReservationJob.objects.get(id=job_id)
-    except ReservationJob.DoesNotExist:
-        return Response(status=http_status.HTTP_404_NOT_FOUND)
+    job, err = _get_owned_job(request, job_id)
+    if err:
+        return err
     if job.status == ReservationJob.Status.PENDING:
         job.status = ReservationJob.Status.PAUSED
         job.last_message = f"일시중지됨 (시도 {job.attempts}회). 재개하면 이어서 재시도합니다."
@@ -189,10 +232,9 @@ def job_resume(request, job_id):
 
     요청 본문에 retry_interval_ms 가 있으면 간격을 갱신한 뒤 재개한다.
     """
-    try:
-        job = ReservationJob.objects.get(id=job_id)
-    except ReservationJob.DoesNotExist:
-        return Response(status=http_status.HTTP_404_NOT_FOUND)
+    job, err = _get_owned_job(request, job_id)
+    if err:
+        return err
     if job.status == ReservationJob.Status.PAUSED:
         interval = request.data.get("retry_interval_ms")
         if interval is not None:
@@ -211,20 +253,21 @@ def job_resume(request, job_id):
     return Response(ReservationJobSerializer(job).data)
 
 
-def _active_jobs():
-    """아직 끝나지 않은(대기/진행/일시중지) 작업 쿼리셋."""
+def _active_jobs(user_id):
+    """해당 user 의 아직 끝나지 않은(대기/진행/일시중지) 작업 쿼리셋."""
     return ReservationJob.objects.filter(
+        user_id=user_id,
         status__in=[
             ReservationJob.Status.QUEUED,
             ReservationJob.Status.PENDING,
             ReservationJob.Status.PAUSED,
-        ]
+        ],
     )
 
 
-def _all_jobs_payload(count: int):
-    """일괄 작업 응답: 영향 건수 + 전체 작업 목록(완료/종료 포함)."""
-    jobs = ReservationJob.objects.all()[:100]
+def _all_jobs_payload(user_id, count: int):
+    """일괄 작업 응답: 영향 건수 + 해당 user 의 전체 작업 목록(완료/종료 포함)."""
+    jobs = ReservationJob.objects.filter(user_id=user_id)[:100]
     return {
         "affected": count,
         "jobs": ReservationJobSerializer(jobs, many=True).data,
@@ -233,25 +276,34 @@ def _all_jobs_payload(count: int):
 
 @api_view(["POST"])
 def jobs_pause_all(request):
-    """진행중(PENDING)인 모든 작업을 일시중지."""
+    """로그인 계정의 진행중(PENDING) 작업을 모두 일시중지."""
+    user_id = _auth_user_id(request)
+    if not user_id:
+        return _unauthorized()
     count = 0
-    for job in ReservationJob.objects.filter(status=ReservationJob.Status.PENDING):
+    for job in ReservationJob.objects.filter(
+        user_id=user_id, status=ReservationJob.Status.PENDING
+    ):
         job.status = ReservationJob.Status.PAUSED
         job.last_message = f"일시중지됨 (시도 {job.attempts}회). 재개하면 이어서 재시도합니다."
         job.save()
         count += 1
-    return Response(_all_jobs_payload(count))
+    return Response(_all_jobs_payload(user_id, count))
 
 
 @api_view(["POST"])
 def jobs_resume_all(request):
-    """일시중지/대기중인 모든 작업의 재시도를 시작/재개.
+    """로그인 계정의 일시중지/대기중 작업의 재시도를 모두 시작/재개.
 
     PAUSED → 재개, QUEUED → 시작. 둘 다 PENDING 으로 만들고 루프를 큐잉.
     """
+    user_id = _auth_user_id(request)
+    if not user_id:
+        return _unauthorized()
     count = 0
     for job in ReservationJob.objects.filter(
-        status__in=[ReservationJob.Status.PAUSED, ReservationJob.Status.QUEUED]
+        user_id=user_id,
+        status__in=[ReservationJob.Status.PAUSED, ReservationJob.Status.QUEUED],
     ):
         job.status = ReservationJob.Status.PENDING
         job.last_message = "재시도를 시작합니다."
@@ -260,12 +312,15 @@ def jobs_resume_all(request):
         job.task_id = async_result.id
         job.save()
         count += 1
-    return Response(_all_jobs_payload(count))
+    return Response(_all_jobs_payload(user_id, count))
 
 
 @api_view(["POST"])
 def jobs_set_interval_all(request):
-    """진행 중이지 않은(끝나지 않은) 모든 작업의 재시도 간격을 일괄 설정."""
+    """로그인 계정의 끝나지 않은 작업들의 재시도 간격을 일괄 설정."""
+    user_id = _auth_user_id(request)
+    if not user_id:
+        return _unauthorized()
     interval = request.data.get("retry_interval_ms")
     try:
         iv = int(interval)
@@ -279,5 +334,5 @@ def jobs_set_interval_all(request):
             {"detail": "재시도 간격은 최소 100ms 입니다."},
             status=http_status.HTTP_400_BAD_REQUEST,
         )
-    count = _active_jobs().update(retry_interval_ms=iv)
-    return Response(_all_jobs_payload(count))
+    count = _active_jobs(user_id).update(retry_interval_ms=iv)
+    return Response(_all_jobs_payload(user_id, count))

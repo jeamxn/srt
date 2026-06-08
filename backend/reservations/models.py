@@ -1,6 +1,22 @@
 from django.db import models
 
 
+class AuthToken(models.Model):
+    """SRT 로그인 확인 성공 시 발급되는 세션 토큰.
+
+    token → user_id(SRT 회원번호) 매핑. 클라이언트는 이 토큰을
+    X-Auth-Token 헤더로 보내고, 서버는 해당 user_id 의 작업만 보여준다.
+    """
+
+    token = models.CharField(max_length=64, unique=True, db_index=True)
+    user_id = models.CharField(max_length=100, help_text="SRT 회원번호")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user_id} ({self.token[:8]}…)"
+
+
 class ReservationJob(models.Model):
     """예약 작업.
 
@@ -16,6 +32,9 @@ class ReservationJob(models.Model):
         RESERVED = "RESERVED", "예약완료"
         FAILED = "FAILED", "실패"
         CANCELLED = "CANCELLED", "취소됨"
+
+    # 소유자 (SRT 회원번호). 로그인한 계정 기준으로 작업을 격리한다.
+    user_id = models.CharField(max_length=100, db_index=True, default="")
 
     # SRT 자격증명 (예약 수행에 필요)
     srt_id = models.CharField(max_length=100)

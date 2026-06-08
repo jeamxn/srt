@@ -12,6 +12,7 @@ class ReservationJobSerializer(serializers.ModelSerializer):
         model = ReservationJob
         fields = [
             "id",
+            "user_id",
             "dep",
             "arr",
             "date",

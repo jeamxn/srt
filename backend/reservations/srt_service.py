@@ -200,7 +200,15 @@ def try_reserve(
     }
 
 
-def verify_login(srt_id: str, srt_pw: str) -> bool:
-    """자격증명 검증용. 로그인 성공 여부만 반환."""
-    get_client(srt_id, srt_pw)
-    return True
+def verify_login(srt_id: str, srt_pw: str) -> str:
+    """자격증명 검증용. 로그인 성공 시 SRT 회원번호를 반환한다.
+
+    회원번호(숫자)만 허용한다. 이메일/전화번호 형식은 거부한다.
+    """
+    import re as _re
+
+    if not _re.fullmatch(r"\d{6,}", (srt_id or "").strip()):
+        raise SRTAuthError("회원번호(숫자)로만 로그인할 수 있습니다.")
+    client = get_client(srt_id, srt_pw)
+    membership = getattr(client, "membership_number", None) or srt_id.strip()
+    return str(membership)
