@@ -12,9 +12,7 @@ from .serializers import (
 from .srt_service import (
     STATIONS,
     search_trains,
-    try_reserve,
     verify_login,
-    SRTSoldOut,
     SRTAuthError,
     SRTServiceError,
 )
@@ -71,10 +69,10 @@ def search(request):
 
 @api_view(["POST"])
 def reserve(request):
-    """예약 요청.
+    """예약 요청을 큐에 등록만 한다 (즉시 시도하지 않음).
 
-    1) 즉시 1회 시도해서 자리가 있으면 바로 예약 완료.
-    2) 자리가 없으면 PENDING 작업으로 등록하고 Celery 가 5초마다 재시도.
+    실제 재시도 루프는 사용자가 '예약 현황'에서 시작 버튼을 눌러야 시작된다.
+    재시도 간격(retry_interval_ms)도 함께 저장한다.
     """
     s = ReserveRequestSerializer(data=request.data)
     s.is_valid(raise_exception=True)
@@ -90,82 +88,17 @@ def reserve(request):
         train_number=d["train_number"],
         train_label=d.get("train_label", ""),
         seat_type=d.get("seat_type", "GENERAL_FIRST"),
-        status=ReservationJob.Status.PENDING,
-    )
-
-    # 즉시 1회 시도
-    try:
-        result = try_reserve(
-            srt_id=d["srt_id"],
-            srt_pw=d["srt_pw"],
-            dep=d["dep"],
-            arr=d["arr"],
-            date=d["date"],
-            time=d.get("time", "000000"),
-            train_number=d["train_number"],
-            seat_type=d.get("seat_type", "GENERAL_FIRST"),
-        )
-    except SRTAuthError as e:
-        job.status = ReservationJob.Status.FAILED
-        job.last_message = f"로그인 실패: {e}"
-        job.attempts = 1
-        job.save()
-        return Response(
-            {"detail": str(e), "job": ReservationJobSerializer(job).data},
-            status=http_status.HTTP_401_UNAUTHORIZED,
-        )
-    except SRTSoldOut as e:
-        # 자리 없음 → 백그라운드 재시도 등록
-        job.attempts = 1
-        job.last_message = f"자리 없음, 5초마다 재시도 시작: {e}"
-        job.save()
-        send_slack(
-            f"🔄 [{job.train_label or f'{job.dep}→{job.arr} {job.date} {job.train_number}'}] "
-            f"시도 1회 — 자리 없음, 5초마다 재시도 시작"
-        )
-        async_result = attempt_reservation.apply_async(
-            args=[job.id], countdown=5
-        )
-        job.task_id = async_result.id
-        job.save()
-        return Response(
-            {
-                "queued": True,
-                "message": "자리가 없어 5초마다 자동 재시도합니다.",
-                "job": ReservationJobSerializer(job).data,
-            },
-            status=http_status.HTTP_202_ACCEPTED,
-        )
-    except SRTServiceError as e:
-        job.status = ReservationJob.Status.FAILED
-        job.last_message = f"오류: {e}"
-        job.attempts = 1
-        job.save()
-        return Response(
-            {"detail": str(e), "job": ReservationJobSerializer(job).data},
-            status=http_status.HTTP_400_BAD_REQUEST,
-        )
-
-    # 즉시 성공
-    job.status = ReservationJob.Status.RESERVED
-    job.attempts = 1
-    job.reservation_number = result.get("reservation_number", "")
-    job.result = result
-    job.last_message = "예약 성공! " + result.get("summary", "")
-    job.save()
-    send_slack(
-        f"✅ 예약 성공! [{job.train_label or f'{job.dep}→{job.arr} {job.date} {job.train_number}'}] "
-        f"{result.get('summary', '')}\n"
-        f"예약번호 {job.reservation_number} · 결제 기한 내 결제하세요.",
-        mention_channel=True,
+        retry_interval_ms=d.get("retry_interval_ms", 5000),
+        status=ReservationJob.Status.QUEUED,
+        last_message="대기열에 등록됨. '예약 현황'에서 시작을 누르면 재시도를 시작합니다.",
     )
     return Response(
         {
-            "reserved": True,
-            "message": "즉시 예약에 성공했습니다.",
+            "queued": True,
+            "message": "예약 현황에 추가했습니다. 시작을 누르면 자동 예약을 시작합니다.",
             "job": ReservationJobSerializer(job).data,
         },
-        status=http_status.HTTP_201_CREATED,
+        status=http_status.HTTP_202_ACCEPTED,
     )
 
 
@@ -185,6 +118,45 @@ def job_detail(request, job_id):
 
 
 @api_view(["POST"])
+def job_start(request, job_id):
+    """대기중(QUEUED) 작업의 재시도 루프를 시작한다.
+
+    요청 본문에 retry_interval_ms 가 있으면 간격을 갱신한 뒤 시작한다.
+    """
+    try:
+        job = ReservationJob.objects.get(id=job_id)
+    except ReservationJob.DoesNotExist:
+        return Response(status=http_status.HTTP_404_NOT_FOUND)
+    if job.status not in (
+        ReservationJob.Status.QUEUED,
+        ReservationJob.Status.PAUSED,
+    ):
+        return Response(
+            {"detail": "시작할 수 없는 상태입니다.", "job": ReservationJobSerializer(job).data},
+            status=http_status.HTTP_400_BAD_REQUEST,
+        )
+    interval = request.data.get("retry_interval_ms")
+    if interval is not None:
+        try:
+            iv = int(interval)
+            if iv >= 100:
+                job.retry_interval_ms = iv
+        except (TypeError, ValueError):
+            pass
+    job.status = ReservationJob.Status.PENDING
+    job.last_message = "재시도를 시작합니다."
+    job.save()
+    async_result = attempt_reservation.apply_async(args=[job.id], countdown=0)
+    job.task_id = async_result.id
+    job.save()
+    send_slack(
+        f"🔄 [{job.train_label or f'{job.dep}→{job.arr} {job.date} {job.train_number}'}] "
+        f"자동 예약 시작 — {job.retry_interval_ms}ms 간격으로 재시도"
+    )
+    return Response(ReservationJobSerializer(job).data)
+
+
+@api_view(["POST"])
 def job_cancel(request, job_id):
     """진행중인 재시도 작업을 완전 취소."""
     try:
@@ -192,6 +164,7 @@ def job_cancel(request, job_id):
     except ReservationJob.DoesNotExist:
         return Response(status=http_status.HTTP_404_NOT_FOUND)
     if job.status in (
+        ReservationJob.Status.QUEUED,
         ReservationJob.Status.PENDING,
         ReservationJob.Status.PAUSED,
     ):

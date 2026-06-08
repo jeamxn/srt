@@ -37,6 +37,9 @@ def attempt_reservation(self, job_id: int):
         ReservationJob.Status.FAILED,
     ):
         return {"status": job.status, "note": "already finished"}
+    # 아직 시작 안 한(QUEUED) 작업이면 실행하지 않음
+    if job.status == ReservationJob.Status.QUEUED:
+        return {"status": "QUEUED", "note": "not started yet"}
     if job.status == ReservationJob.Status.PAUSED:
         # 일시중지: 재시도 루프를 멈춘다 (resume 시 다시 큐잉됨)
         return {"status": "PAUSED", "note": "paused, retry loop stopped"}
@@ -44,7 +47,8 @@ def attempt_reservation(self, job_id: int):
     job.attempts += 1
     job.task_id = self.request.id or ""
 
-    interval = settings.RESERVE_RETRY_INTERVAL
+    # 잡별 재시도 간격 (ms → s). 최대 시도 횟수는 전역 설정 사용.
+    interval = max(job.retry_interval_ms, 100) / 1000.0
     max_attempts = settings.RESERVE_MAX_ATTEMPTS
 
     try:

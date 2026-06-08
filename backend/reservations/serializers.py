@@ -22,6 +22,7 @@ class ReservationJobSerializer(serializers.ModelSerializer):
             "status",
             "status_display",
             "attempts",
+            "retry_interval_ms",
             "last_message",
             "reservation_number",
             "result",
@@ -58,4 +59,7 @@ class ReserveRequestSerializer(serializers.Serializer):
         ],
         required=False,
         default="GENERAL_FIRST",
+    )
+    retry_interval_ms = serializers.IntegerField(
+        required=False, default=5000, min_value=100
     )

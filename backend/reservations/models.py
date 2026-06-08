@@ -10,7 +10,8 @@ class ReservationJob(models.Model):
     """
 
     class Status(models.TextChoices):
-        PENDING = "PENDING", "대기/재시도중"
+        QUEUED = "QUEUED", "대기중(미시작)"
+        PENDING = "PENDING", "재시도중"
         PAUSED = "PAUSED", "일시중지"
         RESERVED = "RESERVED", "예약완료"
         FAILED = "FAILED", "실패"
@@ -33,9 +34,12 @@ class ReservationJob(models.Model):
 
     # 상태
     status = models.CharField(
-        max_length=12, choices=Status.choices, default=Status.PENDING
+        max_length=12, choices=Status.choices, default=Status.QUEUED
     )
     attempts = models.IntegerField(default=0)
+
+    # 재시도 간격 (밀리초 단위). 잡별로 사용자가 설정.
+    retry_interval_ms = models.IntegerField(default=5000)
     last_message = models.TextField(blank=True, default="")
 
     # 예약 성공 결과
