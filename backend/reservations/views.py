@@ -227,6 +227,15 @@ def _active_jobs():
     )
 
 
+def _all_jobs_payload(count: int):
+    """일괄 작업 응답: 영향 건수 + 전체 작업 목록(완료/종료 포함)."""
+    jobs = ReservationJob.objects.all()[:100]
+    return {
+        "affected": count,
+        "jobs": ReservationJobSerializer(jobs, many=True).data,
+    }
+
+
 @api_view(["POST"])
 def jobs_pause_all(request):
     """진행중(PENDING)인 모든 작업을 일시중지."""
@@ -236,9 +245,7 @@ def jobs_pause_all(request):
         job.last_message = f"일시중지됨 (시도 {job.attempts}회). 재개하면 이어서 재시도합니다."
         job.save()
         count += 1
-    return Response(
-        {"affected": count, "jobs": ReservationJobSerializer(_active_jobs(), many=True).data}
-    )
+    return Response(_all_jobs_payload(count))
 
 
 @api_view(["POST"])
@@ -258,9 +265,7 @@ def jobs_resume_all(request):
         job.task_id = async_result.id
         job.save()
         count += 1
-    return Response(
-        {"affected": count, "jobs": ReservationJobSerializer(_active_jobs(), many=True).data}
-    )
+    return Response(_all_jobs_payload(count))
 
 
 @api_view(["POST"])
@@ -280,6 +285,4 @@ def jobs_set_interval_all(request):
             status=http_status.HTTP_400_BAD_REQUEST,
         )
     count = _active_jobs().update(retry_interval_ms=iv)
-    return Response(
-        {"affected": count, "jobs": ReservationJobSerializer(_active_jobs(), many=True).data}
-    )
+    return Response(_all_jobs_payload(count))
