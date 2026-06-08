@@ -13,8 +13,17 @@ SECRET_KEY = os.environ.get(
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
 ALLOWED_HOSTS = os.environ.get(
-    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,backend"
+    "DJANGO_ALLOWED_HOSTS", "*"
 ).split(",")
+
+# 리버스 프록시(Traefik/Dokploy) 뒤에서 https 인식
+CSRF_TRUSTED_ORIGINS = [
+    o
+    for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
+    if o
+]
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -94,10 +103,12 @@ REST_FRAMEWORK = {
     ],
 }
 
-# CORS
-CORS_ALLOWED_ORIGINS = os.environ.get(
-    "CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
-).split(",")
+# CORS — 환경변수 없으면 전체 허용 (프록시 뒤 단일/다중 도메인 편의)
+_cors_env = os.environ.get("CORS_ALLOWED_ORIGINS", "").strip()
+if _cors_env:
+    CORS_ALLOWED_ORIGINS = _cors_env.split(",")
+else:
+    CORS_ALLOW_ALL_ORIGINS = True
 
 # Celery
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
