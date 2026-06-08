@@ -10,12 +10,17 @@ from celery import shared_task
 from django.conf import settings
 
 from .models import ReservationJob
+from .slack import send_slack
 from .srt_service import (
     try_reserve,
     SRTSoldOut,
     SRTServiceError,
     SRTAuthError,
 )
+
+
+def _job_label(job) -> str:
+    return job.train_label or f"{job.dep}→{job.arr} {job.date} {job.train_number}"
 
 
 @shared_task(bind=True)
@@ -57,8 +62,11 @@ def attempt_reservation(self, job_id: int):
             job.status = ReservationJob.Status.FAILED
             job.last_message = f"최대 시도 횟수({max_attempts}) 초과로 중단."
             job.save()
+            send_slack(f"❌ [{_job_label(job)}] {job.last_message}")
             return {"status": "FAILED", "reason": "max attempts"}
         job.save()
+        # 매 시도마다 Slack 알림
+        send_slack(f"🔄 [{_job_label(job)}] 시도 {job.attempts}회 — 자리 없음, 재시도 중")
         # interval 초 뒤 재시도
         attempt_reservation.apply_async(args=[job_id], countdown=interval)
         return {"status": "RETRY", "attempt": job.attempts}
@@ -66,11 +74,13 @@ def attempt_reservation(self, job_id: int):
         job.status = ReservationJob.Status.FAILED
         job.last_message = f"로그인 실패: {e}"
         job.save()
+        send_slack(f"❌ [{_job_label(job)}] 로그인 실패로 중단: {e}")
         return {"status": "FAILED", "reason": "auth"}
     except SRTServiceError as e:
         job.status = ReservationJob.Status.FAILED
         job.last_message = f"오류: {e}"
         job.save()
+        send_slack(f"❌ [{_job_label(job)}] 오류로 중단: {e}")
         return {"status": "FAILED", "reason": str(e)}
 
     # 성공
@@ -79,4 +89,10 @@ def attempt_reservation(self, job_id: int):
     job.result = result
     job.last_message = "예약 성공! " + result.get("summary", "")
     job.save()
+    # 성공 시 @channel 멘션
+    send_slack(
+        f"✅ 예약 성공! [{_job_label(job)}] {result.get('summary', '')}\n"
+        f"예약번호 {job.reservation_number} · 결제 기한 내 결제하세요.",
+        mention_channel=True,
+    )
     return {"status": "RESERVED", "reservation_number": job.reservation_number}

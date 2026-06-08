@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status as http_status
 
 from .models import ReservationJob
+from .slack import send_slack
 from .serializers import (
     ReservationJobSerializer,
     SearchRequestSerializer,
@@ -118,6 +119,10 @@ def reserve(request):
         job.attempts = 1
         job.last_message = f"자리 없음, 5초마다 재시도 시작: {e}"
         job.save()
+        send_slack(
+            f"🔄 [{job.train_label or f'{job.dep}→{job.arr} {job.date} {job.train_number}'}] "
+            f"시도 1회 — 자리 없음, 5초마다 재시도 시작"
+        )
         async_result = attempt_reservation.apply_async(
             args=[job.id], countdown=5
         )
@@ -148,6 +153,12 @@ def reserve(request):
     job.result = result
     job.last_message = "예약 성공! " + result.get("summary", "")
     job.save()
+    send_slack(
+        f"✅ 예약 성공! [{job.train_label or f'{job.dep}→{job.arr} {job.date} {job.train_number}'}] "
+        f"{result.get('summary', '')}\n"
+        f"예약번호 {job.reservation_number} · 결제 기한 내 결제하세요.",
+        mention_channel=True,
+    )
     return Response(
         {
             "reserved": True,

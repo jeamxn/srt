@@ -119,3 +119,8 @@ CELERY_TASK_TRACK_STARTED = True
 # 예약 재시도 설정
 RESERVE_RETRY_INTERVAL = int(os.environ.get("RESERVE_RETRY_INTERVAL", "5"))  # 초
 RESERVE_MAX_ATTEMPTS = int(os.environ.get("RESERVE_MAX_ATTEMPTS", "2160"))  # 5초*2160=3시간
+
+# Slack 알림 (bot token으로 chat.postMessage)
+SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN", "")
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
+SLACK_CHANNEL_ID = os.environ.get("SLACK_CHANNEL_ID", "")
