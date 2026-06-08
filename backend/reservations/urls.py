@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path("stations/", views.stations, name="stations"),
+    path("slack-users/", views.slack_users, name="slack-users"),
     path("login-check/", views.login_check, name="login-check"),
     path("search/", views.search, name="search"),
     path("reserve/", views.reserve, name="reserve"),

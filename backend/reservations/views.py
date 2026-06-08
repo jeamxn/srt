@@ -18,6 +18,7 @@ from .srt_service import (
     SRTServiceError,
 )
 from .tasks import attempt_reservation
+from .slack import list_slack_users
 
 
 def _auth_user_id(request):
@@ -44,6 +45,17 @@ def _unauthorized():
 def stations(request):
     """예약 가능한 역 목록."""
     return Response({"stations": STATIONS})
+
+
+@api_view(["GET"])
+def slack_users(request):
+    """Slack 워크스페이스 멤버 목록 (예약 성공 알림 멘션 대상 선택용).
+
+    로그인된 사용자만 조회 가능.
+    """
+    if not _auth_user_id(request):
+        return _unauthorized()
+    return Response({"users": list_slack_users()})
 
 
 @api_view(["POST"])
@@ -120,6 +132,7 @@ def reserve(request):
         train_label=d.get("train_label", ""),
         seat_type=d.get("seat_type", "GENERAL_FIRST"),
         retry_interval_ms=d.get("retry_interval_ms", 5000),
+        slack_user_id=d.get("slack_user_id", ""),
         status=ReservationJob.Status.QUEUED,
         last_message="대기열에 등록됨. '예약 현황'에서 시작을 누르면 재시도를 시작합니다.",
     )

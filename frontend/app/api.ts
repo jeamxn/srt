@@ -79,6 +79,7 @@ export interface Job {
   train_number: string;
   train_label: string;
   seat_type: string;
+  slack_user_id: string;
   status: string;
   status_display: string;
   attempts: number;
@@ -95,8 +96,15 @@ export interface Credentials {
   srt_pw: string;
 }
 
+export interface SlackUser {
+  id: string;
+  name: string;
+}
+
 export const api = {
   stations: () => request<{ stations: string[] }>("/stations/"),
+
+  slackUsers: () => request<{ users: SlackUser[] }>("/slack-users/"),
 
   loginCheck: (c: Credentials) =>
     request<{ ok: boolean; user_id: string; token: string }>("/login-check/", {

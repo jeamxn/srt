@@ -51,6 +51,9 @@ class ReservationJob(models.Model):
     # 표시용 메타
     train_label = models.CharField(max_length=200, blank=True, default="")
 
+    # 예약 성공 시 멘션할 Slack user id (비어있으면 알림 안 보냄)
+    slack_user_id = models.CharField(max_length=40, blank=True, default="")
+
     # 상태
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.QUEUED

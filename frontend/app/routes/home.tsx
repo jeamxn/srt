@@ -36,6 +36,7 @@ import {
   type Train,
   type Job,
   type Credentials,
+  type SlackUser,
 } from "~/api";
 
 const { Title, Text } = Typography;
@@ -95,6 +96,9 @@ export default function Home() {
   const [creds, setCreds] = useState<Credentials>({ srt_id: "", srt_pw: "" });
   const [loggedIn, setLoggedIn] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  // Slack 멤버 목록 + 선택된 멘션 대상 (미선택이면 알림 안 감)
+  const [slackUsers, setSlackUsers] = useState<SlackUser[]>([]);
+  const [slackUserId, setSlackUserId] = useState<string | undefined>(undefined);
 
   const [dep, setDep] = useState("수서");
   const [arr, setArr] = useState("부산");
@@ -155,9 +159,19 @@ export default function Home() {
       setUserId(uid);
       setCreds((c) => ({ ...c, srt_id: uid }));
       refreshJobs();
+      loadSlackUsers();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function loadSlackUsers() {
+    try {
+      const d = await api.slackUsers();
+      setSlackUsers(d.users);
+    } catch {
+      /* Slack 미설정 등은 조용히 무시 */
+    }
+  }
 
   useEffect(() => {
     if (!loggedIn) return;
@@ -194,6 +208,7 @@ export default function Home() {
       setUserId(res.user_id);
       message.success(`로그인 완료 (회원번호 ${res.user_id}). 열차를 검색하세요.`);
       refreshJobs();
+      loadSlackUsers();
     } catch (e: any) {
       clearAuth();
       setLoggedIn(false);
@@ -211,6 +226,8 @@ export default function Home() {
     setJobs([]);
     setTrains([]);
     setSearched(false);
+    setSlackUsers([]);
+    setSlackUserId(undefined);
     setCreds((c) => ({ ...c, srt_pw: "" }));
     message.success("로그아웃했습니다.");
   }
@@ -254,6 +271,7 @@ export default function Home() {
         train_number: t.train_number,
         train_label: label,
         seat_type: seatType,
+        slack_user_id: slackUserId ?? "",
       });
       message.success(res.message);
       await refreshJobs();
@@ -435,13 +453,44 @@ export default function Home() {
                 회원번호 <strong>{userId}</strong> 로 로그인되어 있습니다. 아래
                 예약 현황에는 이 계정의 작업만 표시됩니다.
               </Text>
-              <Button
-                icon={<LogoutOutlined />}
-                onClick={handleLogout}
-                danger
+              <div
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  alignItems: "flex-end",
+                }}
               >
-                로그아웃
-              </Button>
+                <Button
+                  icon={<LogoutOutlined />}
+                  onClick={handleLogout}
+                  danger
+                >
+                  로그아웃
+                </Button>
+                <div style={{ flex: 1, minWidth: 220 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    예약 성공 시 Slack 알림 받을 사람 (선택 안 하면 알림 없음)
+                  </Text>
+                  <Select
+                    value={slackUserId}
+                    onChange={setSlackUserId}
+                    allowClear
+                    showSearch
+                    optionFilterProp="label"
+                    placeholder={
+                      slackUsers.length
+                        ? "Slack 멤버 선택"
+                        : "Slack 멤버 없음 (미설정)"
+                    }
+                    options={slackUsers.map((u) => ({
+                      value: u.id,
+                      label: u.name,
+                    }))}
+                    style={{ width: "100%", marginTop: 6 }}
+                  />
+                </div>
+              </div>
             </Space>
           ) : (
             <Space direction="vertical" size={16} style={{ width: "100%" }}>

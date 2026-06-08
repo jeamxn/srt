@@ -91,10 +91,11 @@ def attempt_reservation(self, job_id: int):
     job.result = result
     job.last_message = "예약 성공! " + result.get("summary", "")
     job.save()
-    # 성공 시 @channel 멘션
-    send_slack(
-        f"✅ 예약 성공! [{_job_label(job)}] {result.get('summary', '')}\n"
-        f"예약번호 {job.reservation_number} · 결제 기한 내 결제하세요.",
-        mention_channel=True,
-    )
+    # 선택한 Slack 사용자가 있을 때만 성공 알림 (그 사람을 멘션)
+    if job.slack_user_id:
+        send_slack(
+            f"✅ 예약 성공! [{_job_label(job)}] {result.get('summary', '')}\n"
+            f"예약번호 {job.reservation_number} · 결제 기한 내 결제하세요.",
+            mention_user=job.slack_user_id,
+        )
     return {"status": "RESERVED", "reservation_number": job.reservation_number}

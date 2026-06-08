@@ -20,6 +20,7 @@ class ReservationJobSerializer(serializers.ModelSerializer):
             "train_number",
             "train_label",
             "seat_type",
+            "slack_user_id",
             "status",
             "status_display",
             "attempts",
@@ -63,4 +64,7 @@ class ReserveRequestSerializer(serializers.Serializer):
     )
     retry_interval_ms = serializers.IntegerField(
         required=False, default=5000, min_value=100
+    )
+    slack_user_id = serializers.CharField(
+        required=False, allow_blank=True, default=""
     )
