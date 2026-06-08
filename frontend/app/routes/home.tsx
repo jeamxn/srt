@@ -99,6 +99,7 @@ export default function Home() {
   // Slack 멤버 목록 + 선택된 멘션 대상 (미선택이면 알림 안 감)
   const [slackUsers, setSlackUsers] = useState<SlackUser[]>([]);
   const [slackUserId, setSlackUserId] = useState<string | undefined>(undefined);
+  const [slackLoading, setSlackLoading] = useState(false);
 
   const [dep, setDep] = useState("수서");
   const [arr, setArr] = useState("부산");
@@ -165,11 +166,14 @@ export default function Home() {
   }, []);
 
   async function loadSlackUsers() {
+    setSlackLoading(true);
     try {
       const d = await api.slackUsers();
       setSlackUsers(d.users);
     } catch {
       /* Slack 미설정 등은 조용히 무시 */
+    } finally {
+      setSlackLoading(false);
     }
   }
 
@@ -477,11 +481,17 @@ export default function Home() {
                     onChange={setSlackUserId}
                     allowClear
                     showSearch
+                    loading={slackLoading}
                     optionFilterProp="label"
                     placeholder={
-                      slackUsers.length
+                      slackLoading
+                        ? "Slack 멤버 불러오는 중…"
+                        : slackUsers.length
                         ? "Slack 멤버 선택"
                         : "Slack 멤버 없음 (미설정)"
+                    }
+                    notFoundContent={
+                      slackLoading ? "불러오는 중…" : "멤버 없음"
                     }
                     options={slackUsers.map((u) => ({
                       value: u.id,
