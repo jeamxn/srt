@@ -328,6 +328,13 @@ export default function Home() {
   const hasActive = jobs.some(
     (j) => j.status === "QUEUED" || j.status === "PENDING" || j.status === "PAUSED"
   );
+  const activeJobs = jobs.filter(
+    (j) => j.status === "QUEUED" || j.status === "PENDING" || j.status === "PAUSED"
+  );
+  const doneJobs = jobs.filter(
+    (j) =>
+      j.status === "RESERVED" || j.status === "FAILED" || j.status === "CANCELLED"
+  );
 
   const stationOptions = stations.map((s) => ({ value: s, label: s }));
   const timeOptions = Array.from({ length: 24 }, (_, h) => ({
@@ -575,10 +582,10 @@ export default function Home() {
           </Card>
         )}
 
-        {/* 4. 예약 현황 */}
-        {jobs.length > 0 && (
+        {/* 4. 예약 현황 (진행중) */}
+        {activeJobs.length > 0 && (
           <Card
-            title="4. 예약 현황"
+            title="4. 진행중인 예약"
             extra={
               hasActive ? (
                 <Space size={8} wrap>
@@ -633,7 +640,7 @@ export default function Home() {
             }
           >
             <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              {jobs.map((j) => (
+              {activeJobs.map((j) => (
                 <div
                   key={j.id}
                   style={{
@@ -804,6 +811,55 @@ export default function Home() {
                           </Button>
                         </Popconfirm>
                       </Space>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </Space>
+          </Card>
+        )}
+
+        {/* 5. 완료/종료된 예약 */}
+        {doneJobs.length > 0 && (
+          <Card title="5. 완료 / 종료" style={{ marginTop: 20 }}>
+            <Space direction="vertical" size={12} style={{ width: "100%" }}>
+              {doneJobs.map((j) => (
+                <div
+                  key={j.id}
+                  style={{
+                    border: "1px solid #303030",
+                    borderRadius: 10,
+                    padding: "12px 16px",
+                    opacity: j.status === "RESERVED" ? 1 : 0.7,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 12,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <strong style={{ fontSize: 14 }}>
+                      {j.train_label || `${j.dep}→${j.arr} ${j.train_number}`}
+                    </strong>
+                    <Badge
+                      status={STATUS_BADGE[j.status] ?? "default"}
+                      text={j.status_display}
+                    />
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {fmtDate(j.date)} · 시도 {j.attempts}회
+                    {j.reservation_number &&
+                      ` · 예약번호 ${j.reservation_number}`}
+                  </Text>
+                  {j.last_message && (
+                    <div style={{ marginTop: 4 }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {j.last_message}
+                      </Text>
                     </div>
                   )}
                 </div>
