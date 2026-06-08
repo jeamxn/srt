@@ -103,6 +103,12 @@ export default function Home() {
     Record<number, { value: number; unit: string }>
   >({});
   const [startingId, setStartingId] = useState<number | null>(null);
+  // 전체 시간 설정용 (헤더)
+  const [bulkInterval, setBulkInterval] = useState<{ value: number; unit: string }>({
+    value: 5,
+    unit: "s",
+  });
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   function intervalFor(j: Job) {
     return intervals[j.id] ?? msToUnit(j.retry_interval_ms);
@@ -264,6 +270,58 @@ export default function Home() {
       message.error(e.message);
     }
   }
+
+  async function handlePauseAll() {
+    setBulkBusy(true);
+    try {
+      const d = await api.pauseAll();
+      message.info(`${d.affected}건 일시중지했습니다.`);
+      setJobs(d.jobs);
+    } catch (e: any) {
+      message.error(e.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleResumeAll() {
+    setBulkBusy(true);
+    try {
+      const d = await api.resumeAll();
+      message.success(`${d.affected}건 재시도를 시작했습니다.`);
+      setJobs(d.jobs);
+    } catch (e: any) {
+      message.error(e.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleSetIntervalAll() {
+    const ms = Math.round(
+      bulkInterval.value * (UNIT_FACTOR[bulkInterval.unit] ?? 1000)
+    );
+    if (!ms || ms < 100) {
+      message.warning("재시도 간격은 최소 100ms 이상이어야 합니다.");
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      const d = await api.setIntervalAll(ms);
+      message.success(`${d.affected}건 간격을 적용했습니다.`);
+      setIntervals({});
+      setJobs(d.jobs);
+    } catch (e: any) {
+      message.error(e.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  // 활성(끝나지 않은) 작업이 하나라도 있는지
+  const hasActive = jobs.some(
+    (j) => j.status === "QUEUED" || j.status === "PENDING" || j.status === "PAUSED"
+  );
 
   const stationOptions = stations.map((s) => ({ value: s, label: s }));
   const timeOptions = Array.from({ length: 24 }, (_, h) => ({
@@ -513,7 +571,61 @@ export default function Home() {
 
         {/* 4. 예약 현황 */}
         {jobs.length > 0 && (
-          <Card title="4. 예약 현황">
+          <Card
+            title="4. 예약 현황"
+            extra={
+              hasActive ? (
+                <Space size={8} wrap>
+                  <Space.Compact>
+                    <InputNumber
+                      size="small"
+                      min={1}
+                      value={bulkInterval.value}
+                      onChange={(v) =>
+                        setBulkInterval((s) => ({ ...s, value: Number(v) || 0 }))
+                      }
+                      style={{ width: 80 }}
+                    />
+                    <Select
+                      size="small"
+                      value={bulkInterval.unit}
+                      onChange={(u) => setBulkInterval((s) => ({ ...s, unit: u }))}
+                      options={[
+                        { value: "ms", label: "ms" },
+                        { value: "s", label: "초" },
+                        { value: "min", label: "분" },
+                      ]}
+                      style={{ width: 64 }}
+                    />
+                  </Space.Compact>
+                  <Button
+                    size="small"
+                    loading={bulkBusy}
+                    onClick={handleSetIntervalAll}
+                  >
+                    전체 시간 적용
+                  </Button>
+                  <Button
+                    size="small"
+                    icon={<PauseOutlined />}
+                    loading={bulkBusy}
+                    onClick={handlePauseAll}
+                  >
+                    전체 일시중지
+                  </Button>
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<CaretRightOutlined />}
+                    loading={bulkBusy}
+                    onClick={handleResumeAll}
+                  >
+                    전체 시작/재개
+                  </Button>
+                </Space>
+              ) : null
+            }
+          >
             <Space direction="vertical" size={12} style={{ width: "100%" }}>
               {jobs.map((j) => (
                 <div

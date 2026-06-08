@@ -99,6 +99,22 @@ export const api = {
 
   jobs: () => request<{ jobs: Job[] }>("/jobs/"),
 
+  pauseAll: () =>
+    request<{ affected: number; jobs: Job[] }>("/jobs/pause-all/", {
+      method: "POST",
+    }),
+
+  resumeAll: () =>
+    request<{ affected: number; jobs: Job[] }>("/jobs/resume-all/", {
+      method: "POST",
+    }),
+
+  setIntervalAll: (retry_interval_ms: number) =>
+    request<{ affected: number; jobs: Job[] }>("/jobs/set-interval-all/", {
+      method: "POST",
+      body: JSON.stringify({ retry_interval_ms }),
+    }),
+
   startJob: (id: number, retry_interval_ms: number) =>
     request<Job>(`/jobs/${id}/start/`, {
       method: "POST",

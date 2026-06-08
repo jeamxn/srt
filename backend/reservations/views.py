@@ -203,3 +203,72 @@ def job_resume(request, job_id):
         job.task_id = async_result.id
         job.save()
     return Response(ReservationJobSerializer(job).data)
+
+
+def _active_jobs():
+    """아직 끝나지 않은(대기/진행/일시중지) 작업 쿼리셋."""
+    return ReservationJob.objects.filter(
+        status__in=[
+            ReservationJob.Status.QUEUED,
+            ReservationJob.Status.PENDING,
+            ReservationJob.Status.PAUSED,
+        ]
+    )
+
+
+@api_view(["POST"])
+def jobs_pause_all(request):
+    """진행중(PENDING)인 모든 작업을 일시중지."""
+    count = 0
+    for job in ReservationJob.objects.filter(status=ReservationJob.Status.PENDING):
+        job.status = ReservationJob.Status.PAUSED
+        job.last_message = f"일시중지됨 (시도 {job.attempts}회). 재개하면 이어서 재시도합니다."
+        job.save()
+        count += 1
+    return Response(
+        {"affected": count, "jobs": ReservationJobSerializer(_active_jobs(), many=True).data}
+    )
+
+
+@api_view(["POST"])
+def jobs_resume_all(request):
+    """일시중지/대기중인 모든 작업의 재시도를 시작/재개.
+
+    PAUSED → 재개, QUEUED → 시작. 둘 다 PENDING 으로 만들고 루프를 큐잉.
+    """
+    count = 0
+    for job in ReservationJob.objects.filter(
+        status__in=[ReservationJob.Status.PAUSED, ReservationJob.Status.QUEUED]
+    ):
+        job.status = ReservationJob.Status.PENDING
+        job.last_message = "재시도를 시작합니다."
+        job.save()
+        async_result = attempt_reservation.apply_async(args=[job.id], countdown=0)
+        job.task_id = async_result.id
+        job.save()
+        count += 1
+    return Response(
+        {"affected": count, "jobs": ReservationJobSerializer(_active_jobs(), many=True).data}
+    )
+
+
+@api_view(["POST"])
+def jobs_set_interval_all(request):
+    """진행 중이지 않은(끝나지 않은) 모든 작업의 재시도 간격을 일괄 설정."""
+    interval = request.data.get("retry_interval_ms")
+    try:
+        iv = int(interval)
+    except (TypeError, ValueError):
+        return Response(
+            {"detail": "retry_interval_ms 가 필요합니다."},
+            status=http_status.HTTP_400_BAD_REQUEST,
+        )
+    if iv < 100:
+        return Response(
+            {"detail": "재시도 간격은 최소 100ms 입니다."},
+            status=http_status.HTTP_400_BAD_REQUEST,
+        )
+    count = _active_jobs().update(retry_interval_ms=iv)
+    return Response(
+        {"affected": count, "jobs": ReservationJobSerializer(_active_jobs(), many=True).data}
+    )
