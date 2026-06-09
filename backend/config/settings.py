@@ -121,6 +121,17 @@ CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://redis:6
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 
+# 캐시 (Redis). 슬랙 멤버 목록 등 외부 API 응답 캐싱에 사용.
+REDIS_CACHE_URL = os.environ.get("REDIS_CACHE_URL", "redis://redis:6379/2")
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_CACHE_URL,
+    }
+}
+# 슬랙 멤버 목록 캐시 TTL (초). 기본 10분.
+SLACK_USERS_CACHE_TTL = int(os.environ.get("SLACK_USERS_CACHE_TTL", "600"))
+
 # 예약 재시도 설정 (기본 간격만; 시도 횟수 제한 없음)
 RESERVE_RETRY_INTERVAL = int(os.environ.get("RESERVE_RETRY_INTERVAL", "5"))  # 초
 

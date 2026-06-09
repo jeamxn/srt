@@ -1,5 +1,7 @@
 import secrets
 
+from django.conf import settings
+from django.core.cache import cache
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status as http_status
@@ -51,11 +53,21 @@ def stations(request):
 def slack_users(request):
     """Slack 워크스페이스 멤버 목록 (예약 성공 알림 멘션 대상 선택용).
 
-    로그인된 사용자만 조회 가능.
+    로그인된 사용자만 조회 가능. 결과는 Redis 에 TTL 동안 캐싱하여
+    매 요청마다 Slack API 를 때리지 않는다. ?refresh=1 이면 캐시 무시.
     """
     if not _auth_user_id(request):
         return _unauthorized()
-    return Response({"users": list_slack_users()})
+    cache_key = "slack_users"
+    if request.GET.get("refresh") != "1":
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response({"users": cached, "cached": True})
+    users = list_slack_users()
+    # 빈 목록(토큰 미설정/일시 오류)은 짧게만 캐싱
+    ttl = settings.SLACK_USERS_CACHE_TTL if users else 30
+    cache.set(cache_key, users, ttl)
+    return Response({"users": users, "cached": False})
 
 
 @api_view(["GET", "PUT"])
