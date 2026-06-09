@@ -17,6 +17,21 @@ class AuthToken(models.Model):
         return f"{self.user_id} ({self.token[:8]}…)"
 
 
+class UserPref(models.Model):
+    """회원번호(user_id)별 사용자 설정.
+
+    예약 성공 알림을 받을 기본 Slack 멤버를 계정 단위로 저장한다.
+    어느 브라우저/기기에서 로그인하든 동일하게 복원된다.
+    """
+
+    user_id = models.CharField(max_length=100, unique=True, db_index=True)
+    slack_user_id = models.CharField(max_length=40, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user_id} → slack:{self.slack_user_id or '-'}"
+
+
 class ReservationJob(models.Model):
     """예약 작업.
 
@@ -50,9 +65,6 @@ class ReservationJob(models.Model):
 
     # 표시용 메타
     train_label = models.CharField(max_length=200, blank=True, default="")
-
-    # 예약 성공 시 멘션할 Slack user id (비어있으면 알림 안 보냄)
-    slack_user_id = models.CharField(max_length=40, blank=True, default="")
 
     # 상태
     status = models.CharField(

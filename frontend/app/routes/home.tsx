@@ -33,8 +33,6 @@ import {
   getUserId,
   setAuth,
   clearAuth,
-  getSlackUserId,
-  setSlackUserIdStore,
   type Train,
   type Job,
   type Credentials,
@@ -98,16 +96,15 @@ export default function Home() {
   const [creds, setCreds] = useState<Credentials>({ srt_id: "", srt_pw: "" });
   const [loggedIn, setLoggedIn] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
-  // Slack 멤버 목록 + 선택된 멘션 대상 (미선택이면 알림 안 감)
+  // Slack 멤버 목록 + 선택된 멘션 대상 (계정 단위, 서버 저장)
   const [slackUsers, setSlackUsers] = useState<SlackUser[]>([]);
-  const [slackUserId, setSlackUserId] = useState<string | undefined>(
-    () => getSlackUserId() ?? undefined
-  );
+  const [slackUserId, setSlackUserId] = useState<string | undefined>(undefined);
   const [slackLoading, setSlackLoading] = useState(false);
 
   function chooseSlackUser(id: string | undefined) {
     setSlackUserId(id);
-    setSlackUserIdStore(id ?? null);
+    // 계정(UserPref)에 저장 — 어느 기기/브라우저에서든 동일하게 복원됨
+    api.setSlackUser(id ?? "").catch(() => {});
   }
 
   const [dep, setDep] = useState("수서");
@@ -170,6 +167,10 @@ export default function Home() {
       setCreds((c) => ({ ...c, srt_id: uid }));
       refreshJobs();
       loadSlackUsers();
+      api
+        .getPrefs()
+        .then((p) => setSlackUserId(p.slack_user_id || undefined))
+        .catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -219,6 +220,7 @@ export default function Home() {
       setAuth(res.token, res.user_id);
       setLoggedIn(true);
       setUserId(res.user_id);
+      setSlackUserId(res.slack_user_id || undefined);
       message.success(`로그인 완료 (회원번호 ${res.user_id}). 열차를 검색하세요.`);
       refreshJobs();
       loadSlackUsers();

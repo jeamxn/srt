@@ -4,7 +4,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status as http_status
 
-from .models import ReservationJob, AuthToken
+from .models import ReservationJob, AuthToken, UserPref
 from .serializers import (
     ReservationJobSerializer,
     SearchRequestSerializer,
@@ -58,6 +58,23 @@ def slack_users(request):
     return Response({"users": list_slack_users()})
 
 
+@api_view(["GET", "PUT"])
+def prefs(request):
+    """로그인 계정의 사용자 설정 조회/저장.
+
+    GET  → 현재 기본 Slack 멘션 대상 반환
+    PUT  → body 의 slack_user_id 로 갱신 (빈 문자열이면 해제)
+    """
+    user_id = _auth_user_id(request)
+    if not user_id:
+        return _unauthorized()
+    pref, _ = UserPref.objects.get_or_create(user_id=user_id)
+    if request.method == "PUT":
+        pref.slack_user_id = (request.data.get("slack_user_id") or "").strip()
+        pref.save()
+    return Response({"slack_user_id": pref.slack_user_id})
+
+
 @api_view(["POST"])
 def login_check(request):
     """SRT 자격증명 검증 + 인증 토큰 발급.
@@ -80,7 +97,15 @@ def login_check(request):
 
     token = secrets.token_hex(24)
     AuthToken.objects.create(token=token, user_id=user_id)
-    return Response({"ok": True, "user_id": user_id, "token": token})
+    pref = UserPref.objects.filter(user_id=user_id).first()
+    return Response(
+        {
+            "ok": True,
+            "user_id": user_id,
+            "token": token,
+            "slack_user_id": pref.slack_user_id if pref else "",
+        }
+    )
 
 
 @api_view(["POST"])
@@ -120,6 +145,15 @@ def reserve(request):
     s.is_valid(raise_exception=True)
     d = s.validated_data
 
+    # 멘션 대상은 계정(UserPref)에 귀속된다. 요청에 slack_user_id 가 오면
+    # 그것으로 계정 기본값을 갱신한다 (잡 단위로는 저장하지 않음).
+    if "slack_user_id" in request.data:
+        pref, _ = UserPref.objects.get_or_create(user_id=user_id)
+        new_val = (d.get("slack_user_id") or "").strip()
+        if new_val != pref.slack_user_id:
+            pref.slack_user_id = new_val
+            pref.save()
+
     job = ReservationJob.objects.create(
         user_id=user_id,
         srt_id=d["srt_id"],
@@ -132,7 +166,6 @@ def reserve(request):
         train_label=d.get("train_label", ""),
         seat_type=d.get("seat_type", "GENERAL_FIRST"),
         retry_interval_ms=d.get("retry_interval_ms", 5000),
-        slack_user_id=d.get("slack_user_id", ""),
         status=ReservationJob.Status.QUEUED,
         last_message="대기열에 등록됨. '예약 현황'에서 시작을 누르면 재시도를 시작합니다.",
     )

@@ -9,18 +9,6 @@ const API_BASE =
 
 const TOKEN_KEY = "srt_auth_token";
 const USER_KEY = "srt_user_id";
-const SLACK_USER_KEY = "srt_slack_user_id";
-
-export function getSlackUserId(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(SLACK_USER_KEY);
-}
-
-export function setSlackUserIdStore(id: string | null) {
-  if (typeof window === "undefined") return;
-  if (id) window.localStorage.setItem(SLACK_USER_KEY, id);
-  else window.localStorage.removeItem(SLACK_USER_KEY);
-}
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -91,7 +79,6 @@ export interface Job {
   train_number: string;
   train_label: string;
   seat_type: string;
-  slack_user_id: string;
   status: string;
   status_display: string;
   attempts: number;
@@ -119,9 +106,22 @@ export const api = {
   slackUsers: () => request<{ users: SlackUser[] }>("/slack-users/"),
 
   loginCheck: (c: Credentials) =>
-    request<{ ok: boolean; user_id: string; token: string }>("/login-check/", {
+    request<{
+      ok: boolean;
+      user_id: string;
+      token: string;
+      slack_user_id: string;
+    }>("/login-check/", {
       method: "POST",
       body: JSON.stringify(c),
+    }),
+
+  getPrefs: () => request<{ slack_user_id: string }>("/prefs/"),
+
+  setSlackUser: (slack_user_id: string) =>
+    request<{ slack_user_id: string }>("/prefs/", {
+      method: "PUT",
+      body: JSON.stringify({ slack_user_id }),
     }),
 
   search: (

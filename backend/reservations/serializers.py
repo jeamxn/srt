@@ -20,7 +20,6 @@ class ReservationJobSerializer(serializers.ModelSerializer):
             "train_number",
             "train_label",
             "seat_type",
-            "slack_user_id",
             "status",
             "status_display",
             "attempts",
