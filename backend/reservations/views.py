@@ -36,6 +36,23 @@ def _auth_user_id(request):
     return at.user_id
 
 
+def _auth_creds(request):
+    """X-Auth-Token 으로 (user_id, srt_pw) 를 해석한다. 없거나 무효면 (None, None).
+
+    검색/예약 시 프론트가 비밀번호를 다시 보내지 않아도 되도록,
+    로그인 때 토큰에 저장해 둔 자격증명을 꺼내 쓴다.
+    """
+    token = request.headers.get("X-Auth-Token") or request.GET.get("token")
+    if not token:
+        return None, None
+    try:
+        at = AuthToken.objects.get(token=token)
+    except AuthToken.DoesNotExist:
+        return None, None
+    at.save(update_fields=["last_used_at"])  # touch
+    return at.user_id, at.srt_pw
+
+
 def _unauthorized():
     return Response(
         {"detail": "로그인이 필요합니다. SRT 계정으로 먼저 로그인하세요."},
@@ -108,7 +125,7 @@ def login_check(request):
         return Response({"detail": str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
 
     token = secrets.token_hex(24)
-    AuthToken.objects.create(token=token, user_id=user_id)
+    AuthToken.objects.create(token=token, user_id=user_id, srt_pw=srt_pw)
     pref = UserPref.objects.filter(user_id=user_id).first()
     return Response(
         {
@@ -122,14 +139,17 @@ def login_check(request):
 
 @api_view(["POST"])
 def search(request):
-    """열차 검색 (매진 포함)."""
+    """열차 검색 (매진 포함). 로그인 토큰의 자격증명을 사용한다."""
+    user_id, srt_pw = _auth_creds(request)
+    if not user_id:
+        return _unauthorized()
     s = SearchRequestSerializer(data=request.data)
     s.is_valid(raise_exception=True)
     d = s.validated_data
     try:
         trains = search_trains(
-            srt_id=d["srt_id"],
-            srt_pw=d["srt_pw"],
+            srt_id=user_id,
+            srt_pw=srt_pw or d.get("srt_pw", ""),
             dep=d["dep"],
             arr=d["arr"],
             date=d["date"],
@@ -150,12 +170,13 @@ def reserve(request):
     로그인한 계정(user_id)에 귀속된다. 실제 재시도 루프는 사용자가
     '예약 현황'에서 시작 버튼을 눌러야 시작된다.
     """
-    user_id = _auth_user_id(request)
+    user_id, srt_pw = _auth_creds(request)
     if not user_id:
         return _unauthorized()
     s = ReserveRequestSerializer(data=request.data)
     s.is_valid(raise_exception=True)
     d = s.validated_data
+    srt_pw = srt_pw or d.get("srt_pw", "")
 
     # 멘션 대상은 계정(UserPref)에 귀속된다. 요청에 slack_user_id 가 오면
     # 그것으로 계정 기본값을 갱신한다 (잡 단위로는 저장하지 않음).
@@ -168,8 +189,8 @@ def reserve(request):
 
     job = ReservationJob.objects.create(
         user_id=user_id,
-        srt_id=d["srt_id"],
-        srt_pw=d["srt_pw"],
+        srt_id=user_id,
+        srt_pw=srt_pw,
         dep=d["dep"],
         arr=d["arr"],
         date=d["date"],

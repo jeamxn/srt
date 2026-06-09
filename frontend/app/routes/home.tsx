@@ -206,9 +206,9 @@ export default function Home() {
     }
   }
 
-  // 검색/예약: 로그인(토큰)된 상태에서만 가능
-  const canQuery =
-    loggedIn && creds.srt_id.trim() !== "" && creds.srt_pw.trim() !== "";
+  // 검색/예약: 로그인(토큰)된 상태에서만 가능.
+  // 비밀번호는 로그인 시 토큰에 저장되므로 새로고침 후 재입력이 필요 없다.
+  const canQuery = loggedIn;
 
   async function handleLogin() {
     if (creds.srt_id.trim() === "" || creds.srt_pw.trim() === "") {

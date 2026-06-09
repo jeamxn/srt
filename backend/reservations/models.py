@@ -10,6 +10,9 @@ class AuthToken(models.Model):
 
     token = models.CharField(max_length=64, unique=True, db_index=True)
     user_id = models.CharField(max_length=100, help_text="SRT 회원번호")
+    # 검색/예약 수행에 필요한 자격증명. 새로고침 후에도 비밀번호 재입력 없이
+    # 검색할 수 있도록 로그인 시 함께 보관한다 (ReservationJob 과 동일 정책).
+    srt_pw = models.CharField(max_length=200, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(auto_now=True)
 

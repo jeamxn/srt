@@ -35,8 +35,8 @@ class ReservationJobSerializer(serializers.ModelSerializer):
 
 
 class SearchRequestSerializer(serializers.Serializer):
-    srt_id = serializers.CharField()
-    srt_pw = serializers.CharField()
+    srt_id = serializers.CharField(required=False, allow_blank=True, default="")
+    srt_pw = serializers.CharField(required=False, allow_blank=True, default="")
     dep = serializers.CharField()
     arr = serializers.CharField()
     date = serializers.CharField(help_text="yyyyMMdd")
@@ -44,8 +44,8 @@ class SearchRequestSerializer(serializers.Serializer):
 
 
 class ReserveRequestSerializer(serializers.Serializer):
-    srt_id = serializers.CharField()
-    srt_pw = serializers.CharField()
+    srt_id = serializers.CharField(required=False, allow_blank=True, default="")
+    srt_pw = serializers.CharField(required=False, allow_blank=True, default="")
     dep = serializers.CharField()
     arr = serializers.CharField()
     date = serializers.CharField(help_text="yyyyMMdd")
