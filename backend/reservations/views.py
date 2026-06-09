@@ -175,6 +175,7 @@ def reserve(request):
         date=d["date"],
         time=d.get("time", "000000"),
         train_number=d["train_number"],
+        dep_time=d.get("dep_time", ""),
         train_label=d.get("train_label", ""),
         seat_type=d.get("seat_type", "GENERAL_FIRST"),
         retry_interval_ms=d.get("retry_interval_ms", 5000),

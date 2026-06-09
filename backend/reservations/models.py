@@ -59,7 +59,10 @@ class ReservationJob(models.Model):
     dep = models.CharField(max_length=20)
     arr = models.CharField(max_length=20)
     date = models.CharField(max_length=8, help_text="yyyyMMdd")
-    time = models.CharField(max_length=6, default="000000", help_text="hhmmss")
+    time = models.CharField(max_length=6, default="000000", help_text="검색 시작 시각 hhmmss")
+    # 선택한 열차의 실제 출발 시각 (hhmmss). 예약 시 train_number 와 함께
+    # 정확히 이 시각의 열차를 매칭하는 데 사용한다.
+    dep_time = models.CharField(max_length=6, blank=True, default="")
     train_number = models.CharField(max_length=10)
     seat_type = models.CharField(max_length=20, default="GENERAL_FIRST")
 

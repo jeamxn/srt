@@ -61,6 +61,7 @@ def attempt_reservation(self, job_id: int):
             time=job.time,
             train_number=job.train_number,
             seat_type=job.seat_type,
+            dep_time=job.dep_time,
         )
     except SRTSoldOut as e:
         # 자리 없음 → 무제한 재시도 (간격 후 자기 자신 재호출)

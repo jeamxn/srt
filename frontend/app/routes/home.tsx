@@ -285,6 +285,7 @@ export default function Home() {
         date: date.format("YYYYMMDD"),
         time,
         train_number: t.train_number,
+        dep_time: t.dep_time,
         train_label: label,
         seat_type: seatType,
         slack_user_id: slackUserId ?? "",

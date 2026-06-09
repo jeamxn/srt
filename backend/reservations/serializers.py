@@ -18,6 +18,7 @@ class ReservationJobSerializer(serializers.ModelSerializer):
             "date",
             "time",
             "train_number",
+            "dep_time",
             "train_label",
             "seat_type",
             "status",
@@ -50,6 +51,7 @@ class ReserveRequestSerializer(serializers.Serializer):
     date = serializers.CharField(help_text="yyyyMMdd")
     time = serializers.CharField(required=False, default="000000")
     train_number = serializers.CharField()
+    dep_time = serializers.CharField(required=False, allow_blank=True, default="")
     train_label = serializers.CharField(required=False, default="")
     seat_type = serializers.ChoiceField(
         choices=[

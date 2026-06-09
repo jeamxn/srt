@@ -122,16 +122,27 @@ def _find_train(
     date: str,
     time: str,
     train_number: str,
+    dep_time: str = "",
 ):
     """예약 시점에 동일 조건으로 재검색하여 대상 열차 객체를 찾는다.
 
     SRTTrain 객체는 직렬화가 까다로워 DB 에 저장하지 않고,
-    예약 시도마다 (열차번호 기준으로) 재검색하여 최신 객체를 얻는다.
+    예약 시도마다 재검색하여 최신 객체를 얻는다.
+
+    같은 열차번호가 여러 시간대에 존재할 수 있으므로 train_number 와
+    출발시각(dep_time)이 둘 다 일치하는 열차만 매칭한다. dep_time 이
+    주어지면 그 시각부터 검색해 정확한 열차를 빠르게 찾는다.
     """
-    trains = client.search_train(dep, arr, date, time, available_only=False)
+    # dep_time 이 있으면 그 시각부터 검색 (엉뚱한 앞 시간대 열차 배제)
+    search_time = dep_time or time
+    trains = client.search_train(dep, arr, date, search_time, available_only=False)
     for t in trains:
-        if t.train_number == train_number:
-            return t
+        if t.train_number != train_number:
+            continue
+        # 출발시각이 지정돼 있으면 정확히 일치해야 한다.
+        if dep_time and t.dep_time != dep_time:
+            continue
+        return t
     return None
 
 
@@ -144,6 +155,7 @@ def try_reserve(
     time: str,
     train_number: str,
     seat_type: str = "GENERAL_FIRST",
+    dep_time: str = "",
 ) -> dict:
     """예약을 1회 시도한다.
 
@@ -154,9 +166,12 @@ def try_reserve(
     seat = SEAT_TYPE_MAP.get(seat_type, SeatType.GENERAL_FIRST)
     client = get_client(srt_id, srt_pw)
 
-    target = _find_train(client, dep, arr, date, time, train_number)
+    target = _find_train(client, dep, arr, date, time, train_number, dep_time)
     if target is None:
-        raise SRTSoldOut(f"열차({train_number})를 찾을 수 없습니다 (운행 종료/변경).")
+        when = f" {dep_time[:2]}:{dep_time[2:4]}" if len(dep_time) >= 4 else ""
+        raise SRTSoldOut(
+            f"열차({train_number}{when})를 찾을 수 없습니다 (운행 종료/변경)."
+        )
 
     # 좌석 가용성 사전 체크
     want_general = seat_type in ("GENERAL_FIRST", "GENERAL_ONLY")
