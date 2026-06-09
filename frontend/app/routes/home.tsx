@@ -495,7 +495,13 @@ export default function Home() {
                     showSearch
                     loading={slackLoading}
                     disabled={slackLoading}
-                    optionFilterProp="label"
+                    filterOption={(input, option) => {
+                      const u = slackUsers.find((x) => x.id === option?.value);
+                      const hay = `${u?.name ?? ""} ${
+                        u?.real_name ?? ""
+                      }`.toLowerCase();
+                      return hay.includes(input.toLowerCase());
+                    }}
                     placeholder={
                       slackLoading
                         ? "Slack 멤버 불러오는 중…"
@@ -509,28 +515,45 @@ export default function Home() {
                     options={slackUsers.map((u) => ({
                       value: u.id,
                       label: u.name,
+                      real_name: u.real_name,
                       avatar: u.avatar,
                     }))}
-                    optionRender={(opt) => (
-                      <Space>
-                        <Avatar
-                          size={22}
-                          src={(opt.data as any).avatar || undefined}
-                        >
-                          {String(opt.data.label ?? "").slice(0, 1)}
-                        </Avatar>
-                        <span>{opt.data.label}</span>
-                      </Space>
-                    )}
+                    optionRender={(opt) => {
+                      const real = (opt.data as any).real_name as string;
+                      const name = String(opt.data.label ?? "");
+                      const showReal = real && real !== name;
+                      return (
+                        <Space>
+                          <Avatar
+                            size={24}
+                            src={(opt.data as any).avatar || undefined}
+                          >
+                            {name.slice(0, 1)}
+                          </Avatar>
+                          <span>{name}</span>
+                          {showReal && (
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              ({real})
+                            </Text>
+                          )}
+                        </Space>
+                      );
+                    }}
                     labelRender={(props) => {
                       const u = slackUsers.find((x) => x.id === props.value);
                       if (!u) return props.label;
+                      const showReal = u.real_name && u.real_name !== u.name;
                       return (
                         <Space>
                           <Avatar size={20} src={u.avatar || undefined}>
                             {u.name.slice(0, 1)}
                           </Avatar>
                           <span>{u.name}</span>
+                          {showReal && (
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              ({u.real_name})
+                            </Text>
+                          )}
                         </Space>
                       );
                     }}

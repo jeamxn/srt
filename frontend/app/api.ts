@@ -98,6 +98,7 @@ export interface Credentials {
 export interface SlackUser {
   id: string;
   name: string;
+  real_name: string;
   avatar: string;
 }
 
