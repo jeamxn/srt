@@ -4,6 +4,7 @@ import {
   Input,
   InputNumber,
   Select,
+  Avatar,
   Button,
   Badge,
   Tag,
@@ -508,7 +509,31 @@ export default function Home() {
                     options={slackUsers.map((u) => ({
                       value: u.id,
                       label: u.name,
+                      avatar: u.avatar,
                     }))}
+                    optionRender={(opt) => (
+                      <Space>
+                        <Avatar
+                          size={22}
+                          src={(opt.data as any).avatar || undefined}
+                        >
+                          {String(opt.data.label ?? "").slice(0, 1)}
+                        </Avatar>
+                        <span>{opt.data.label}</span>
+                      </Space>
+                    )}
+                    labelRender={(props) => {
+                      const u = slackUsers.find((x) => x.id === props.value);
+                      if (!u) return props.label;
+                      return (
+                        <Space>
+                          <Avatar size={20} src={u.avatar || undefined}>
+                            {u.name.slice(0, 1)}
+                          </Avatar>
+                          <span>{u.name}</span>
+                        </Space>
+                      );
+                    }}
                     style={{ width: "100%", marginTop: 6 }}
                   />
                 </div>

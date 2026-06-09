@@ -3,8 +3,8 @@
 흐름:
 - 예약 요청이 들어오면 attempt_reservation 태스크가 즉시 1회 시도.
 - 성공하면 RESERVED 로 종료.
-- 자리 없음(SRTSoldOut)이면 RESERVE_RETRY_INTERVAL(기본 5초) 뒤 자기 자신을 재호출.
-- RESERVE_MAX_ATTEMPTS 초과하거나 작업이 취소되면 종료.
+- 자리 없음(SRTSoldOut)이면 잡별 재시도 간격(기본 5초) 뒤 자기 자신을 재호출.
+- 시도 횟수 제한은 없다. 사용자가 일시중지/취소하기 전까지 계속 재시도한다.
 """
 from celery import shared_task
 from django.conf import settings
@@ -47,9 +47,9 @@ def attempt_reservation(self, job_id: int):
     job.attempts += 1
     job.task_id = self.request.id or ""
 
-    # 잡별 재시도 간격 (ms → s). 최대 시도 횟수는 전역 설정 사용.
+    # 잡별 재시도 간격 (ms → s). 시도 횟수 제한 없음 — 자리가 날 때까지
+    # 계속 재시도하며, 사용자가 일시중지/취소해야만 멈춘다.
     interval = max(job.retry_interval_ms, 100) / 1000.0
-    max_attempts = settings.RESERVE_MAX_ATTEMPTS
 
     try:
         result = try_reserve(
@@ -63,13 +63,8 @@ def attempt_reservation(self, job_id: int):
             seat_type=job.seat_type,
         )
     except SRTSoldOut as e:
-        # 자리 없음 → 재시도
+        # 자리 없음 → 무제한 재시도 (간격 후 자기 자신 재호출)
         job.last_message = f"시도 {job.attempts}회: {e}"
-        if job.attempts >= max_attempts:
-            job.status = ReservationJob.Status.FAILED
-            job.last_message = f"최대 시도 횟수({max_attempts}) 초과로 중단."
-            job.save()
-            return {"status": "FAILED", "reason": "max attempts"}
         job.save()
         # interval 초 뒤 재시도
         attempt_reservation.apply_async(args=[job_id], countdown=interval)

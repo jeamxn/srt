@@ -22,8 +22,8 @@ SLACK_USERS_API = "https://slack.com/api/users.list"
 def list_slack_users() -> list[dict]:
     """Slack 워크스페이스 멤버 목록을 반환한다.
 
-    봇/삭제된 계정은 제외하고, 실제 사람 계정만 [{id, name}] 형태로 돌려준다.
-    토큰이 없으면 빈 목록.
+    봇/삭제된 계정은 제외하고, 실제 사람 계정만 [{id, name, avatar}] 형태로
+    돌려준다. 토큰이 없으면 빈 목록.
     """
     token = getattr(settings, "SLACK_BOT_TOKEN", "")
     if not token:
@@ -54,7 +54,15 @@ def list_slack_users() -> list[dict]:
                     or profile.get("real_name")
                     or m.get("name", "")
                 )
-                users.append({"id": m.get("id"), "name": display})
+                avatar = (
+                    profile.get("image_72")
+                    or profile.get("image_48")
+                    or profile.get("image_192")
+                    or ""
+                )
+                users.append(
+                    {"id": m.get("id"), "name": display, "avatar": avatar}
+                )
             cursor = (body.get("response_metadata") or {}).get("next_cursor", "")
             if not cursor:
                 break
